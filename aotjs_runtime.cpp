@@ -59,7 +59,7 @@ namespace AotJS {
   }
 
   void Object::setProp(Ref name, Ref val) {
-    props.insert_or_assign(name, val);
+    props.emplace(name, val);
   }
 
   PropList Object::listProps() {
@@ -79,7 +79,7 @@ namespace AotJS {
   }
 
   void Heap::setMark(Object *obj, bool val) {
-    marks.insert_or_assign(obj, val);
+    marks.emplace(obj, val);
   }
 
   void Heap::registerObject(Object *obj) {
@@ -91,7 +91,9 @@ namespace AotJS {
     if (!getMark(obj)) {
       setMark(obj, true);
 
-      for (auto [prop_name, prop_val] : obj->listProps()) {
+      for (auto iter : obj->listProps()) {
+        auto prop_name(iter.first);
+        auto prop_val(iter.second);
         // prop names are always either strings or symbols, so objects.
         mark(prop_name.asObject());
 

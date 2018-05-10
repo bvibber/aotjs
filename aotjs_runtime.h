@@ -28,7 +28,7 @@ namespace AotJS {
   class Ref {
     union {
       double val_double;
-      int64_t val_int64;
+      int64_t val_raw;
       int32_t val_int32;
     };
 
@@ -46,18 +46,19 @@ namespace AotJS {
     static const int64_t tag_bool      = 0xfffe000000000000LL;
     static const int64_t tag_undefined = 0xffff000000000000LL;
 
+    Ref(const Ref &val) : val_raw(val.raw()) {}
     Ref(double val) : val_double(val) {}
-    Ref(int32_t val) : val_int64(((int64_t)val & ~tag_mask) | tag_int32) {}
-    Ref(bool val) : val_int64(((int64_t)val & ~tag_mask) | tag_bool) {}
-    Ref(Object *val) : val_int64((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
-    Ref(Undefined val) : val_int64(tag_undefined) {}
+    Ref(int32_t val) : val_raw(((int64_t)val & ~tag_mask) | tag_int32) {}
+    Ref(bool val) : val_raw(((int64_t)val & ~tag_mask) | tag_bool) {}
+    Ref(Object *val) : val_raw((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
+    Ref(Undefined val) : val_raw(tag_undefined) {}
 
     int64_t raw() const {
-      return val_int64;
+      return val_raw;
     }
 
     int64_t tag() const {
-      return val_int64 & tag_mask;
+      return val_raw & tag_mask;
     }
 
     bool is_double() const {
@@ -101,7 +102,7 @@ namespace AotJS {
     // 64-bit host -- drop the top 16 bits of NaN and tag.
     // Assumes address space has only 48 significant bits
     // but may be signed, as on x86_64.
-    return reinterpret_cast<Object *>((val_int64 << 16) >> 16);
+    return reinterpret_cast<Object *>((val_raw << 16) >> 16);
   #else
     // 32 bit host -- bottom bits are ours, like an int.
     return reinterpret_cast<Object *>(val_int32);
