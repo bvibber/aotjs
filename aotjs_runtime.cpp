@@ -89,6 +89,10 @@ namespace AotJS {
 
   #pragma mark Object
 
+  Object::~Object() {
+    //
+  }
+
   Val Object::getProp(Val name) {
     auto index = props.find(name);
     if (index == props.end()) {
@@ -144,6 +148,12 @@ namespace AotJS {
     return buf.str();
   }
 
+  #pragma mark String
+
+  String::~String() {
+    //
+  }
+
   string String::dump() {
     // todo: emit JSON or something
     std::ostringstream buf;
@@ -151,6 +161,12 @@ namespace AotJS {
     buf << data;
     buf << "\"";
     return buf.str();
+  }
+
+  #pragma mark Symbol
+
+  Symbol::~Symbol() {
+    //
   }
 
   string Symbol::dump() {
@@ -161,6 +177,59 @@ namespace AotJS {
     return buf.str();
   }
 
+  #pragma mark Scope
+
+  Scope::~Scope() {
+    //
+  }
+
+  Object *Scope::newObject(Object *prototype) {
+    return engine->newObject(prototype);
+  }
+
+  String *Scope::newString(const string &aStr) {
+    return engine->newString(aStr);
+  }
+
+  Symbol *Scope::newSymbol(const string &aName) {
+    return engine->newSymbol(aName);
+  }
+
+  Scope *Scope::newScope(std::vector<Val>args, std::vector<Val *>captures) {
+    return engine->newScope(this, args, captures);
+  }
+
+  Val Scope::call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures) {
+    return func(newScope(args, captures));
+  }
+
+  void Scope::markRefsForGC() {
+    if (parent) {
+      parent->markRefsForGC();
+    }
+    for (auto arg : args) {
+      if (arg.isGCThing()) {
+        arg.asGCThing()->markRefsForGC();
+      }
+    }
+    for (auto cap : captures) {
+      if (cap->isGCThing()) {
+        cap->asGCThing()->markRefsForGC();
+      }
+    }
+    for (auto local : locals) {
+      if (local.isGCThing()) {
+        local.asGCThing()->markRefsForGC();
+      }
+    }
+  }
+
+  string Scope::dump() {
+    std::ostringstream buf;
+    buf << "Scope(...)";
+    return buf.str();
+  }
+
   #pragma mark Engine
 
   void Engine::registerForGC(GCThing *obj) {
@@ -168,21 +237,38 @@ namespace AotJS {
   }
 
   Object *Engine::newObject(Object *prototype) {
-    auto obj = new Object(this, prototype);
+    auto obj = new Object(prototype);
     registerForGC(obj);
     return obj;
   }
 
   String *Engine::newString(const string &aStr) {
-    auto str = new String(this, aStr);
+    auto str = new String(aStr);
     registerForGC(str);
     return str;
   }
 
   Symbol *Engine::newSymbol(const string &aName) {
-    auto sym = new Symbol(this, aName);
+    auto sym = new Symbol(aName);
     registerForGC(sym);
     return sym;
+  }
+
+  Scope *Engine::newScope(Scope *parent, std::vector<Val>args, std::vector<Val *>captures) {
+    auto scope = new Scope(parent, args, captures);
+    registerForGC(scope);
+    return scope;
+  }
+
+  Scope *Engine::newScope(std::vector<Val> args, std::vector<Val *>captures) {
+    auto scope = new Scope(this, args, captures);
+    registerForGC(scope);
+    return scope;
+  }
+
+  Val Engine::call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures) {
+    auto scope = newScope(args, captures);
+    return func(scope);
   }
 
   void Engine::gc() {

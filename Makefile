@@ -1,9 +1,9 @@
-SOURCES=aotjs_runtime.cpp aotjs.cpp
+SOURCES=aotjs_runtime.cpp
 HEADERS=aotjs_runtime.h
-CFLAGS=-g
-#CFLAGS=-O2
+CFLAGS=-g -std=c++14
+#CFLAGS=-O2 -std=c++14
 
-all : native
+all : native closure
 
 native : aotjs
 
@@ -16,9 +16,13 @@ clean :
 	rm -f aotjs.wasm.map
 	rm -f aotjs.wast
 	rm -rf aotjs.dSYM
+	rm -f closure
 
-aotjs : $(SOURCES) $(HEADERS)
-	clang++ $(CFLAGS) -std=c++14 -o aotjs $(SOURCES)
+aotjs : aotjs.cpp $(SOURCES) $(HEADERS)
+	clang++ $(CFLAGS) -o aotjs aotjs.cpp $(SOURCES)
+
+closure : samples/closure.cpp $(SOURCES) $(HEADERS)
+	clang++ $(CFLAGS) -o closure samples/closure.cpp $(SOURCES)
 
 aotjs.js : $(SOURCES) $(HEADERS)
-	em++ $(CFLAGS) -std=c++14 -o aotjs.js -s WASM=1 $(SOURCES)
+	em++ $(CFLAGS) -o aotjs.js -s WASM=1 $(SOURCES)

@@ -19,6 +19,11 @@ namespace AotJS {
   extern Type typeof_string;
   extern Type typeof_object;
 
+  class Engine;
+  class Scope;
+  class Val;
+  typedef Val (*FunctionBody)(Scope *scope);
+
   class GCThing;
   class String;
   class Symbol;
@@ -164,7 +169,6 @@ namespace AotJS {
       return undef;
     }
 
-
     void *asPointer() const {
       #if (PTRDIFF_MAX) > 2147483647
         // 64-bit host -- drop the top 16 bits of NaN and tag.
@@ -208,16 +212,13 @@ namespace std {
 
 namespace AotJS {
 
-  class Engine;
-
   class GCThing {
-    Engine *engine;
     bool marked;
 
   public:
-    GCThing(Engine *aEngine) :
-      engine(aEngine),
-      marked(0)
+    GCThing()
+    :
+      marked(false)
     {
       //
     }
@@ -228,6 +229,7 @@ namespace AotJS {
     void markForGC();
     void clearForGC();
     virtual void markRefsForGC();
+
     virtual string dump();
   };
 
@@ -238,12 +240,20 @@ namespace AotJS {
     friend class PropList;
 
   public:
-    Object(Engine *aEngine, Object *aPrototype) :
-      GCThing(aEngine),
+    Object()
+    :
+      prototype(nullptr)
+    {
+      // Special for creating the root Object
+    }
+
+    Object(Object *aPrototype) :
       prototype(aPrototype)
     {
-      //
+      // When we have a prototype chain...
     }
+
+    ~Object() override;
 
     void markRefsForGC() override;
     string dump() override;
@@ -260,12 +270,15 @@ namespace AotJS {
     string data;
 
   public:
-    String(Engine *aEngine, string const &aStr) :
-      GCThing(aEngine),
+    String(string const &aStr)
+    :
+      GCThing(),
       data(aStr)
     {
       //
     }
+
+    ~String() override;
 
     const Type typeof() const {
       return typeof_string;
@@ -286,12 +299,13 @@ namespace AotJS {
     string name;
 
   public:
-    Symbol(Engine *aEngine, string const &aName) :
-      GCThing(aEngine),
+    Symbol(string const &aName) :
       name(aName)
     {
       //
     }
+
+    ~Symbol() override;
 
     const Type typeof() const {
       return typeof_string;
@@ -323,8 +337,75 @@ namespace AotJS {
     Object *newObject(Object *prototype);
     String *newString(const string &aStr);
     Symbol *newSymbol(const string &aName);
+    Scope *newScope(Scope *parent, std::vector<Val> args, std::vector<Val *>captures);
+    Scope *newScope(std::vector<Val> args, std::vector<Val *>captures);
+
+    Val call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures);
 
     void gc();
     string dump();
   };
+
+  class Scope : public GCThing {
+    Engine *engine;
+    Scope *parent;
+    std::vector<Val> args;
+    std::vector<Val *> captures;
+    std::vector<Val> locals;
+
+  public:
+    ~Scope() override;
+
+    Scope(Engine *aEngine,
+      std::vector<Val> aArgs,
+      std::vector<Val *> aCaptures)
+    :
+      engine(aEngine),
+      parent(nullptr),
+      args(aArgs),
+      captures(aCaptures)
+    {
+      // Special for the global context
+    }
+
+    Scope(Scope *aParent,
+      std::vector<Val> aArgs,
+      std::vector<Val *> aCaptures)
+    :
+      engine(aParent->engine),
+      parent(aParent),
+      args(aArgs),
+      captures(aCaptures)
+    {
+      // Regular sub-scopes and call records
+    }
+
+    void allocLocals(size_t count) {
+      for (size_t i = 0; i < count; i++) {
+        locals.push_back(Undefined());
+      }
+    }
+
+    Val *findLocal(size_t index) {
+      return &(locals.data()[index]);
+    }
+
+    Val *findArg(size_t index) {
+      return &(args.data()[index]);
+    }
+
+    Val *findCapture(size_t index) {
+      return captures.data()[index];
+    }
+
+    Object *newObject(Object *prototype);
+    String *newString(const string &aStr);
+    Symbol *newSymbol(const string &aName);
+    Scope *newScope(std::vector<Val> args, std::vector<Val *>captures);
+    Val call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures);
+
+    void markRefsForGC() override;
+    string dump() override;
+  };
+
 }

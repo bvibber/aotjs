@@ -5,3 +5,6 @@ aotjs.wasm
 aotjs.wast
 aotjs.wasm.map
 barf
+closure
+closure.js
+closure.wasm
