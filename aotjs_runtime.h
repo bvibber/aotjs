@@ -11,23 +11,28 @@ namespace AotJS {
   using ::std::unordered_set;
   using ::std::unordered_map;
 
-  typedef const char *Type;
+  typedef const char *Typeof;
 
-  extern Type typeof_undefined;
-  extern Type typeof_number;
-  extern Type typeof_boolean;
-  extern Type typeof_string;
-  extern Type typeof_object;
+  extern Typeof typeof_undefined;
+  extern Typeof typeof_number;
+  extern Typeof typeof_boolean;
+  extern Typeof typeof_string;
+  extern Typeof typeof_symbol;
+  extern Typeof typeof_function;
+  extern Typeof typeof_object;
 
-  class Engine;
-  class Scope;
   class Val;
-  typedef Val (*FunctionBody)(Scope *scope);
 
   class GCThing;
+  class Scope;
+  class Frame;
+
+  class JSThing;
   class String;
   class Symbol;
   class Object;
+  class Engine;
+  class Function;
 
   class Undefined {
     // just a tag
@@ -35,6 +40,61 @@ namespace AotJS {
 
   class Null {
     // just a tag
+  };
+
+  typedef Val (*FunctionBody)(Engine *engine, Scope *scope, Frame *frame);
+
+  ///
+  /// Base class for an item that can be garbage-collected and may
+  /// reference other GC-able items.
+  ///
+  /// Not necessarily exposed to JS.
+  ///
+  class GCThing {
+    bool mMarked;
+
+  public:
+    GCThing()
+    :
+      mMarked(false)
+    {
+      //
+    }
+
+    virtual ~GCThing();
+
+    bool isMarkedForGC() const {
+      return mMarked;
+    }
+
+    void markForGC() {
+      if (!isMarkedForGC()) {
+        mMarked = true;
+        markRefsForGC();
+      }
+    }
+
+    void clearForGC() {
+      mMarked = false;
+    }
+
+    virtual void markRefsForGC();
+
+    virtual string dump();
+  };
+
+  ///
+  /// Represents a GC-able item that can be exposed to JavaScript.
+  ///
+  class JSThing : public GCThing {
+  public:
+    JSThing()
+    {
+      //
+    }
+
+    virtual ~JSThing();
+    virtual Typeof typeof() const;
   };
 
   ///
@@ -49,9 +109,9 @@ namespace AotJS {
   /// May not be optimal for wasm32 yet.
   class Val {
     union {
-      uint64_t val_raw;
-      int32_t val_int32;
-      double val_double;
+      uint64_t mRaw;
+      int32_t mInt32;
+      double mDouble;
     };
 
   public:
@@ -77,28 +137,28 @@ namespace AotJS {
     // tag-only types
     static const uint64_t tag_null       = 0b1111111111111011'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_undefined  = 0b1111111111111100'0000000000000000'0000000000000000'0000000000000000;
-    // pointer types:
+    // GC'd pointer types:
     static const uint64_t tag_min_gc     = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_string     = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_symbol     = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_object     = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
 
-    Val(const Val &val) : val_raw(val.raw()) {}
-    Val(double val)     : val_double(val) {}
-    Val(int32_t val)    : val_raw(((uint64_t)((int64_t)val) & ~tag_mask) | tag_int32) {}
-    Val(bool val)       : val_raw(((uint64_t)val & ~tag_mask) | tag_bool) {}
-    Val(String *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_string) {}
-    Val(Symbol *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_symbol) {}
-    Val(Object *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_object) {}
-    Val(Undefined val)  : val_raw(tag_undefined) {}
-    Val(Null val)       : val_raw(tag_null) {}
+    Val(const Val &aVal) : mRaw(aVal.raw()) {}
+    Val(double aVal)     : mDouble(aVal) {}
+    Val(int32_t aVal)    : mRaw(((uint64_t)((int64_t)aVal) & ~tag_mask) | tag_int32) {}
+    Val(bool aVal)       : mRaw(((uint64_t)aVal & ~tag_mask) | tag_bool) {}
+    Val(Undefined aVal)  : mRaw(tag_undefined) {}
+    Val(Null aVal)       : mRaw(tag_null) {}
+    Val(String *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_string) {}
+    Val(Symbol *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_symbol) {}
+    Val(Object *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
 
     uint64_t raw() const {
-      return val_raw;
+      return mRaw;
     }
 
     uint64_t tag() const {
-      return val_raw & tag_mask;
+      return mRaw & tag_mask;
     }
 
     bool isDouble() const {
@@ -106,7 +166,7 @@ namespace AotJS {
       // Our tagged values will be > tag_max_double in uint64_t interpretation
       // Any non-NaN negative double will be < that
       // Any positive double, inverted, will be < that
-      return (val_raw | sign_bit) <= tag_max_double;
+      return (mRaw | sign_bit) <= tag_max_double;
     }
 
     bool isInt32() const {
@@ -125,10 +185,10 @@ namespace AotJS {
       return tag() == tag_null;
     }
 
-    bool isGCThing() const {
+    bool isJSThing() const {
       // Another clever thing.
       // All pointer types will have at least this value!
-      return val_raw >= tag_min_gc;
+      return mRaw >= tag_min_gc;
     }
 
     bool isString() const {
@@ -143,30 +203,33 @@ namespace AotJS {
       return tag() == tag_object;
     }
 
+    bool isFunction() const {
+      // currently no room for a separate function type. not sure about this.
+      return isJSThing() && asJSThing()->typeof() == typeof_function;
+    }
+
     double asDouble() const {
       // Interpret all bits as double-precision float
-      return val_double;
+      return mDouble;
     }
 
     int32_t asInt32() const {
       // Bottom 32 bits are ours for ints.
-      return val_int32;
+      return mInt32;
     }
 
     bool asBool() const {
       // Bottom 1 bit is all we need!
       // But treat it like an int32.
-      return (bool)val_int32;
+      return (bool)mInt32;
     }
 
     Null asNull() const {
-      Null nullx;
-      return nullx;
+      return Null();
     }
 
     Undefined asUndefined() const {
-      Undefined undef;
-      return undef;
+      return Undefined();
     }
 
     void *asPointer() const {
@@ -174,15 +237,15 @@ namespace AotJS {
         // 64-bit host -- drop the top 16 bits of NaN and tag.
         // Assumes address space has only 48 significant bits
         // but may be signed, as on x86_64.
-        return reinterpret_cast<void *>((val_raw << 16) >> 16);
+        return reinterpret_cast<void *>((mRaw << 16) >> 16);
       #else
         // 32 bit host -- bottom bits are ours, like an int.
-        return reinterpret_cast<void *>(val_int32);
+        return reinterpret_cast<void *>(mInt32);
       #endif
     }
 
-    GCThing *asGCThing() const {
-      return static_cast<GCThing *>(asPointer());
+    JSThing *asJSThing() const {
+      return static_cast<JSThing *>(asPointer());
     }
 
     String *asString() const {
@@ -195,6 +258,10 @@ namespace AotJS {
 
     Object *asObject() const {
       return static_cast<Object *>(asPointer());
+    }
+
+    Function *asFunction() const {
+      return static_cast<Function *>(asFunction());
     }
 
     bool operator==(const Val &rhs) const;
@@ -212,67 +279,42 @@ namespace std {
 
 namespace AotJS {
 
-  class GCThing {
-    bool marked;
+  ///
+  /// Represents a regular JavaScript object, with properties and
+  /// a prototype chain.
+  ///
+  /// Todo: throw exceptions on bad prop lookups
+  /// Todo: implement getters, setters, enumeration, etc
+  ///
+  class Object : public JSThing {
+    Object *mPrototype;
+    unordered_map<Val,Val> mProps;
 
   public:
-    GCThing()
+    Object(Object *aPrototype)
     :
-      marked(false)
+      mPrototype(aPrototype)
     {
-      //
-    }
-
-    virtual ~GCThing();
-
-    bool isMarkedForGC();
-    void markForGC();
-    void clearForGC();
-    virtual void markRefsForGC();
-
-    virtual string dump();
-  };
-
-  class Object : public GCThing {
-    Object *prototype;
-    unordered_map<Val,Val> props;
-
-    friend class PropList;
-
-  public:
-    Object()
-    :
-      prototype(nullptr)
-    {
-      // Special for creating the root Object
-    }
-
-    Object(Object *aPrototype) :
-      prototype(aPrototype)
-    {
-      // When we have a prototype chain...
+      // Note this doesn't call the constructor,
+      // which would be done by outside code.
     }
 
     ~Object() override;
 
     void markRefsForGC() override;
     string dump() override;
-
-    Type getTypeof() const {
-      return typeof_object;
-    }
+    Typeof typeof() const override;
 
     Val getProp(Val name);
     void setProp(Val name, Val val);
   };
 
-  class String : public GCThing {
+  class String : public JSThing {
     string data;
 
   public:
     String(string const &aStr)
     :
-      GCThing(),
       data(aStr)
     {
       //
@@ -280,9 +322,7 @@ namespace AotJS {
 
     ~String() override;
 
-    const Type typeof() const {
-      return typeof_string;
-    }
+    Typeof typeof() const override;
 
     string dump() override;
 
@@ -295,7 +335,7 @@ namespace AotJS {
     }
   };
 
-  class Symbol : public GCThing {
+  class Symbol : public JSThing {
     string name;
 
   public:
@@ -307,9 +347,7 @@ namespace AotJS {
 
     ~Symbol() override;
 
-    const Type typeof() const {
-      return typeof_string;
-    }
+    Typeof typeof() const override;
 
     string dump() override;
 
@@ -318,93 +356,164 @@ namespace AotJS {
     }
   };
 
-  class Engine {
-    Object *root;
-    std::vector<Scope *>stack;
-    unordered_set<GCThing *> objects;
-    void registerForGC(GCThing *obj);
-
-  public:
-    Engine() {
-      root = newObject(nullptr);
-    }
-
-    Object *getRoot() const {
-      return root;
-    }
-
-    Object *newObject(Object *prototype);
-    String *newString(const string &aStr);
-    Symbol *newSymbol(const string &aName);
-    Scope *newScope(Scope *parent, std::vector<Val> args, std::vector<Val *>captures);
-    Scope *newScope(std::vector<Val> args, std::vector<Val *>captures);
-
-    Val call(FunctionBody func, std::vector<Val>args, std::vector<Val *>captures);
-
-    void gc();
-    string dump();
-  };
-
+  ///
+  /// Represents a JS scope.
+  /// Contains local variables, and references the outer scopes.
+  ///
   class Scope : public GCThing {
-    Engine *engine;
-    Scope *parent;
-    std::vector<Val> args;
-    std::vector<Val *> captures;
-    std::vector<Val> locals;
+    Scope *mParent;
+    std::vector<Val> mLocals;
 
   public:
     ~Scope() override;
 
-    Scope(Engine *aEngine,
-      std::vector<Val> aArgs,
-      std::vector<Val *> aCaptures)
+    Scope(Scope *aParent, size_t aLocalCount)
     :
-      engine(aEngine),
-      parent(nullptr),
-      args(aArgs),
-      captures(aCaptures)
+      mParent(aParent),
+      mLocals(std::vector<Val>(aLocalCount, Undefined()))
     {
-      // Special for the global context
+      //
     }
-
-    Scope(Scope *aParent,
-      std::vector<Val> aArgs,
-      std::vector<Val *> aCaptures)
-    :
-      engine(aParent->engine),
-      parent(aParent),
-      args(aArgs),
-      captures(aCaptures)
-    {
-      // Regular sub-scopes and call records
-    }
-
-    void allocLocals(size_t count) {
-      for (size_t i = 0; i < count; i++) {
-        locals.push_back(Undefined());
-      }
-    }
-
-    Val *findLocal(size_t index) {
-      return &(locals.data()[index]);
-    }
-
-    Val *findArg(size_t index) {
-      return &(args.data()[index]);
-    }
-
-    Val *findCapture(size_t index) {
-      return captures.data()[index];
-    }
-
-    Object *newObject(Object *prototype);
-    String *newString(const string &aStr);
-    Symbol *newSymbol(const string &aName);
-    Scope *newScope(std::vector<Val> args, std::vector<Val *>captures);
-    Val call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures);
 
     void markRefsForGC() override;
     string dump() override;
+  };
+
+  ///
+  /// Represents a runtime function object.
+  /// References the
+  ///
+  class Function : public GCThing {
+    Scope *mScope;
+    FunctionBody mBody;
+    std::string mName;
+    size_t mArity;
+    std::vector<Val *> mCaptures;
+
+  public:
+    Function(Scope *aScope,
+      FunctionBody aBody,
+      std::string aName,
+      size_t aArity,
+      std::vector<Val *>aCaptures)
+    :
+      mScope(aScope),
+      mBody(aBody),
+      mName(aName),
+      mArity(aArity),
+      mCaptures(aCaptures)
+    {
+      //
+    }
+
+    size_t arity() const {
+      return mArity;
+    }
+
+    FunctionBody body() const {
+      return mBody;
+    }
+
+    void markRefsForGC() override;
+    string dump() override;
+  };
+
+  ///
+  /// Represents a JS stack frame.
+  /// Contains function reference, `this` pointer, and arguments.
+  ///
+  class Frame : public GCThing {
+    Frame *mParent;
+    Function *mFunc;
+    Val mThis;
+    std::vector<Val> mArgs;
+
+  public:
+    Frame(Frame *aParent,
+      Function *aFunc,
+      Val aThis,
+      std::vector<Val> aArgs)
+    :
+      mParent(aParent),
+      mFunc(aFunc),
+      mThis(aThis),
+      mArgs(aArgs)
+    {
+      // Guarantee the expected arg count is always there
+      // todo: implement default parameters
+      while (mArgs.size() < mFunc->arity()) {
+        mArgs.push_back(Undefined());
+      }
+    }
+
+    Frame *parent() const {
+      return mParent;
+    }
+
+    Function *func() const {
+      return mFunc;
+    }
+
+    Val *args() {
+      return mArgs.data();
+    }
+
+    ~Frame() override;
+    void markRefsForGC() override;
+  };
+
+  ///
+  /// Represents an entire JS world.
+  ///
+  /// Garbage collection is run when gc() is called manually,
+  /// or just let everything deallocate when the engine is
+  /// destroyed.
+  ///
+  class Engine {
+    Object *mRoot;
+    Scope *mScope;
+    Frame *mFrame;
+
+    // Set of all live objects.
+    // Todo: replace this with an allocator we know how to walk!
+    unordered_set<GCThing *> mObjects;
+    void registerForGC(GCThing *aObj);
+
+  public:
+    Engine()
+    :
+      mRoot(newObject(nullptr)),
+      mScope(nullptr),
+      mFrame(nullptr)
+    {
+      //
+    }
+
+    Object *root() const {
+      return mRoot;
+    }
+
+    Object *newObject(Object *prototype);
+
+    String *newString(const string &aStr);
+
+    Symbol *newSymbol(const string &aName);
+
+    Function *newFunction(Scope *aScope,
+      FunctionBody aBody,
+      std::string aName,
+      size_t aArity,
+      std::vector<Val *>aCaptures);
+
+    Scope *newScope(Scope *aParent, size_t aLocalCount);
+
+    Frame *newFrame(Frame *aParent,
+      Function *aFunc,
+      Val aThis,
+      std::vector<Val> aArgs);
+
+    void gc();
+    string dump();
   };
 
 }

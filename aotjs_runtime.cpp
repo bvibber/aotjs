@@ -3,11 +3,13 @@
 #include <sstream>
 
 namespace AotJS {
-  Type typeof_undefined = "undefined";
-  Type typeof_number = "number";
-  Type typeof_boolean = "boolean";
-  Type typeof_string = "string";
-  Type typeof_object = "object";
+  Typeof typeof_undefined = "undefined";
+  Typeof typeof_number = "number";
+  Typeof typeof_boolean = "boolean";
+  Typeof typeof_string = "string";
+  Typeof typeof_symbol = "symbol";
+  Typeof typeof_function = "function";
+  Typeof typeof_object = "object";
 }
 
 #pragma mark Val hash helpers
@@ -51,8 +53,8 @@ namespace AotJS {
       buf << "null";
     } else if (isUndefined()) {
       buf << "undefined";
-    } else if (isGCThing()) {
-      buf << asGCThing()->dump();
+    } else if (isJSThing()) {
+      buf << asJSThing()->dump();
     }
     return buf.str();
   }
@@ -64,21 +66,6 @@ namespace AotJS {
     //
   }
 
-  bool GCThing::isMarkedForGC() {
-    return marked;
-  }
-
-  void GCThing::markForGC() {
-    if (!marked) {
-      marked = true;
-      markRefsForGC();
-    }
-  }
-
-  void GCThing::clearForGC() {
-    marked = false;
-  }
-
   void GCThing::markRefsForGC() {
     // no-op default
   }
@@ -87,17 +74,52 @@ namespace AotJS {
     return "GCThing";
   }
 
+  #pragma mark JSThing
+
+  JSThing::~JSThing() {
+    //
+  }
+
+  Typeof JSThing::typeof() {
+    return "invalid-jsthing";
+  }
+
+  string JSThing::dump() {
+    return "JSThing";
+  }
+
+
   #pragma mark Object
 
   Object::~Object() {
     //
   }
 
-  Val Object::getProp(Val name) {
-    auto index = props.find(name);
-    if (index == props.end()) {
-      if (prototype) {
-        return prototype->getProp(name);
+  Typeof Object::typeof() {
+    return typeof_object;
+  }
+
+  static Val normalizePropName(Val aName) {
+    if (aName.isString()) {
+      return aName;
+    } else if (aName.isSymbol()) {
+      return aName;
+    } else {
+      // todo: convert to string
+      // hrm, we need a ref to an engine for that?
+      std::abort(1);
+      return Undefined();
+    }
+  }
+
+  // todo: handle numeric indices
+  // todo: getters
+  Val Object::getProp(Val aName) {
+    auto name = normalizePropName(aName);
+    auto index = mProps.find(name);
+    if (index == mProps.end()) {
+      if (mPrototype) {
+        return mPrototype->getProp(name);
       } else {
         return Undefined();
       }
@@ -107,7 +129,12 @@ namespace AotJS {
   }
 
   void Object::setProp(Val name, Val val) {
-    props.emplace(name, val);
+    auto name = normalizePropName(aName);
+      props.emplace(name, val);
+    } else {
+      // todo: throw exception
+      std::abort(1);
+    }
   }
 
   void Object::markRefsForGC() {
@@ -117,11 +144,11 @@ namespace AotJS {
 
       // prop names are always either strings or symbols,
       // so they are pointers to GCThings.
-      prop_name.asGCThing()->markForGC();
+      prop_name.asJSThing()->markForGC();
 
       // prop values may not be, so check!
-      if (prop_val.isGCThing()) {
-        prop_val.asGCThing()->markForGC();
+      if (prop_val.isJSThing()) {
+        prop_val.asJSThing()->markForGC();
       }
     }
   }
@@ -154,6 +181,11 @@ namespace AotJS {
     //
   }
 
+  Typeof String::typeof() {
+  {
+    return typeof_string;
+  }
+
   string String::dump() {
     // todo: emit JSON or something
     std::ostringstream buf;
@@ -167,6 +199,10 @@ namespace AotJS {
 
   Symbol::~Symbol() {
     //
+  }
+
+  Typeof Symbol::typeof() const {
+    return typeof_symbol;
   }
 
   string Symbol::dump() {
@@ -183,40 +219,11 @@ namespace AotJS {
     //
   }
 
-  Object *Scope::newObject(Object *prototype) {
-    return engine->newObject(prototype);
-  }
-
-  String *Scope::newString(const string &aStr) {
-    return engine->newString(aStr);
-  }
-
-  Symbol *Scope::newSymbol(const string &aName) {
-    return engine->newSymbol(aName);
-  }
-
-  Scope *Scope::newScope(std::vector<Val>args, std::vector<Val *>captures) {
-    return engine->newScope(this, args, captures);
-  }
-
-  Val Scope::call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures) {
-    return func(newScope(args, captures));
-  }
-
   void Scope::markRefsForGC() {
-    if (parent) {
-      parent->markRefsForGC();
+    if (mParent) {
+      mParent->markRefsForGC();
     }
-    for (auto arg : args) {
-      if (arg.isGCThing()) {
-        arg.asGCThing()->markRefsForGC();
-      }
-    }
-    for (auto cap : captures) {
-      if (cap->isGCThing()) {
-        cap->asGCThing()->markRefsForGC();
-      }
-    }
+
     for (auto local : locals) {
       if (local.isGCThing()) {
         local.asGCThing()->markRefsForGC();
@@ -228,6 +235,30 @@ namespace AotJS {
     std::ostringstream buf;
     buf << "Scope(...)";
     return buf.str();
+  }
+
+  #pragma mark Frame
+
+  Frame::~Frame() {
+    //
+  }
+
+  Frame::markRefsForGC() {
+    if (mParent) {
+      mParent->markRefsForGC();
+    }
+
+    mFunc->markRefsForGC();
+
+    if (mThis.isGCThing()) {
+      mThis.asGCThing()->markRefsForGC();
+    }
+
+    for (auto val : mArgs) {
+      if (val.isGCThing()) {
+        val.asGCThing()->markRefsForGC();
+      }
+    }
   }
 
   #pragma mark Engine
@@ -254,46 +285,55 @@ namespace AotJS {
     return sym;
   }
 
-  Scope *Engine::newScope(Scope *parent, std::vector<Val>args, std::vector<Val *>captures) {
-    auto scope = new Scope(parent, args, captures);
+  Scope *Engine::newScope(Scope *aParent, size_t aLocalCount) {
+    auto scope = new Scope(aParent, aLocalCount);
     registerForGC(scope);
     return scope;
   }
 
-  Scope *Engine::newScope(std::vector<Val> args, std::vector<Val *>captures) {
-    auto scope = new Scope(this, args, captures);
-    registerForGC(scope);
-    return scope;
-  }
+  Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
+    if (aFunc.isFunction()) {
+      auto func = aFunc.asFunction();
+      auto frame = newFrame(func, aThis, aArgs);
 
-  Val Engine::call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures) {
-    auto scope = newScope(args, captures);
-    stack.push_back(scope);
-    auto retval = func(scope);
-    stack.pop_back();
-    return retval;
+      stack.push_back(frame);
+      auto retval = func->body()(this, func->scope(), frame);
+      stack.pop_back();
+
+      return retval;
+    } else {
+      std::abort(1);
+    }
   }
 
   void Engine::gc() {
-    root->markForGC();
-    for (auto scope : stack) {
-      scope->markForGC();
+    // 1) Mark!
+    mRoot->markForGC();
+
+    if (mScope) {
+      mScope->markForGC();
     }
 
+    if (mFrame) {
+      mFrame->markForGC();
+    }
+
+    // 2) Sweep!
     // Todo: don't require allocating memory to free memory!
-    std::vector<GCThing *> dead_objects;
-    for (auto obj : objects) {
+    std::vector<GCThing *> deadObjects;
+    for (auto obj : mObjects) {
       if (!obj->isMarkedForGC()) {
-        dead_objects.push_back(obj);
+        deadObjects.push_back(obj);
       }
     }
-    for (auto obj : dead_objects) {
+
+    for (auto obj : deadObjects) {
       if (obj->isMarkedForGC()) {
         // Keep the object, but reset the marker value for next time.
         obj->clearForGC();
       } else {
         // No findable references to this object. Destroy it!
-        objects.erase(obj);
+        mObjects.erase(obj);
         delete obj;
       }
     }
@@ -304,7 +344,7 @@ namespace AotJS {
     buf << "Engine([";
 
     bool first = true;
-    for (auto obj : objects) {
+    for (auto obj : mObjects) {
       if (first) {
         first = false;
       } else {

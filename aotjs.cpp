@@ -2,27 +2,46 @@
 
 #include <iostream>
 
-AotJS::Val work(AotJS::Scope *scope) {
-  auto root = scope->findArg(0);
+using namespace AotJS;
 
-  auto obj = scope->newObject(nullptr);
-  auto objname = scope->newString("an_obj");
-  auto propname = scope->newString("propname");
-  auto propval = scope->newString("propval");
-  auto unused = scope->newString("unused");
+Val work(Engine *engine, Function *func, Frame *frame) {
+  auto args = frame->args();
+  auto locals = scope->locals();
+  auto root = &args[0];
+  auto obj = &args[1];
+  auto objname = &args[2];
+  auto propname = &args[3];
+  auto propval = &args[4];
+  auto unused = &args[5];
+
+  *obj = engine->newObject(nullptr);
+  *objname = engine->newString("an_obj");
+  *propname = engine->newString("propname");
+  *propval = engine->newString("propval");
+  *unused = engine->newString("unused");
 
   // Retain a couple strings on an object
-  obj->setProp(propname, propval);
+  // @todo this would be done with a wrapper interface probably
+  obj->asObject()->setProp(propname, propval);
 
   root->asObject()->setProp(objname, obj);
 
-  return AotJS::Undefined();
+  return Undefined();
 }
 
 int main() {
-  AotJS::Engine engine;
+  Engine engine;
 
-  engine.call(work, {engine.getRoot()}, {});
+  // Register the function!
+  auto func = engine.newFunction(
+    engine.newScope(nullptr, 5),
+    work,
+    "work",
+    1,
+    {}
+  );
+
+  auto retval = engine.call(func, {engine.getRoot()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();
