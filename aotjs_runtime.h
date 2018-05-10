@@ -4,18 +4,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-// 13 bits reserved at top for NaN
-// 1 bit to mark whether it's a tag
-// 2 bits to mark subtype
-// 48 bits at the bottom for pointers (for native x86_64)
-// 16 bits apare + 32 bits at the bottom for ints
-#define TAG_MASK      0xffff000000000000LL
-#define TAG_DOUBLE    0xfff8000000000000LL
-#define TAG_INT32     0xfffc000000000000LL
-#define TAG_OBJECT    0xfffd000000000000LL
-#define TAG_BOOL      0xfffe000000000000LL
-#define TAG_UNDEFINED 0xffff000000000000LL
-
 typedef const char *aotjs_type;
 
 extern aotjs_type typeof_undefined;
@@ -39,38 +27,50 @@ class aotjs_ref {
 
 public:
 
+  // 13 bits reserved at top for NaN
+  // 1 bit to mark whether it's a tag
+  // 2 bits to mark subtype
+  // 48 bits at the bottom for pointers (for native x86_64)
+  // 16 bits apare + 32 bits at the bottom for ints
+  static const int64_t tag_mask      = 0xffff000000000000LL;
+  static const int64_t tag_double    = 0xfff8000000000000LL;
+  static const int64_t tag_int32     = 0xfffc000000000000LL;
+  static const int64_t tag_object    = 0xfffd000000000000LL;
+  static const int64_t tag_bool      = 0xfffe000000000000LL;
+  static const int64_t tag_undefined = 0xffff000000000000LL;
+
   aotjs_ref(double val) : val_double(val) {}
-  aotjs_ref(int32_t val) : val_int64(((int64_t)val & ~TAG_MASK) | TAG_INT32) {}
-  aotjs_ref(bool val) : val_int64(((int64_t)val & ~TAG_MASK) | TAG_BOOL) {}
-  aotjs_ref(aotjs_object *val) : val_int64((reinterpret_cast<int64_t>(val) & ~TAG_MASK) | TAG_BOOL) {}
-  aotjs_ref(aotjs_undefined val) : val_int64(TAG_UNDEFINED) {}
+  aotjs_ref(int32_t val) : val_int64(((int64_t)val & ~tag_mask) | tag_int32) {}
+  aotjs_ref(bool val) : val_int64(((int64_t)val & ~tag_mask) | tag_bool) {}
+  aotjs_ref(aotjs_object *val) : val_int64((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
+  aotjs_ref(aotjs_undefined val) : val_int64(tag_undefined) {}
 
   int64_t raw() const {
     return val_int64;
   }
 
   int64_t tag() const {
-    return val_int64 & TAG_MASK;
+    return val_int64 & tag_mask;
   }
 
   bool is_double() const {
-    return tag() == TAG_DOUBLE;
+    return tag() == tag_double;
   }
 
   bool is_int32() const {
-    return tag() == TAG_INT32;
+    return tag() == tag_int32;
   }
 
   bool is_object() const {
-    return tag() == TAG_OBJECT;
+    return tag() == tag_object;
   }
 
   bool is_bool() const {
-    return tag() == TAG_BOOL;
+    return tag() == tag_bool;
   }
 
   bool is_undefined() const {
-    return tag() == TAG_UNDEFINED;
+    return tag() == tag_undefined;
   }
 
   double as_double() const {
