@@ -24,23 +24,45 @@ namespace AotJS {
       return true;
     }
 
-    if (isObject() && rhs.isObject()) {
-      auto obj_l = asObject();
-      auto type_l = obj_l->getTypeof();
-
-      auto obj_r = rhs.asObject();
-      auto type_r = obj_r->getTypeof();
-
-      if (type_l == typeof_string && type_r == typeof_string) {
-        // Two string instances may still be equal.
-        auto str_l = static_cast<String *>(obj_l);
-        auto str_r = static_cast<String *>(obj_r);
-        return (*str_l) == (*str_r);
-      }
+    if (isString() && rhs.isString()) {
+      // Two string instances may still compare equal.
+      return asString() == rhs.asString();
     }
 
     // Non-identical non-string objects never compare identical.
     return false;
+  }
+
+  #pragma mark GCThing
+
+  GCThing::GCThing(Heap *aHeap) :
+    heap(aHeap),
+    marked(0)
+  {
+    //
+  }
+
+  GCThing::~GCThing() {
+    //
+  }
+
+  bool GCThing::isMarkedForGC() {
+    return marked;
+  }
+
+  void GCThing::markForGC() {
+    if (!marked) {
+      marked = true;
+      markRefsForGC();
+    }
+  }
+
+  void GCThing::clearForGC() {
+    marked = false;
+  }
+
+  void GCThing::markRefsForGC() {
+    // no-op default
   }
 
   #pragma mark Object
@@ -62,75 +84,67 @@ namespace AotJS {
     props.emplace(name, val);
   }
 
-  PropList Object::listProps() {
-    PropList props = this;
-    return props;
+  void Object::markRefsForGC() {
+    for (auto iter : props) {
+      auto prop_name(iter.first);
+      auto prop_val(iter.second);
+
+      // prop names are always either strings or symbols,
+      // so they are pointers to GCThings.
+      prop_name.asGCThing()->markForGC();
+
+      // prop values may not be, so check!
+      if (prop_val.isGCThing()) {
+        prop_val.asGCThing()->markForGC();
+      }
+    }
   }
 
   #pragma mark Heap
 
-  bool Heap::getMark(Object *obj) {
-    auto mark = marks.find(obj);
-    if (mark->first) {
-      return mark->second;
-    } else {
-      return false;
-    }
-  }
-
-  void Heap::setMark(Object *obj, bool val) {
-    marks.emplace(obj, val);
-  }
-
-  void Heap::registerObject(Object *obj) {
+  void Heap::registerForGC(GCThing *obj) {
     objects.insert(obj);
-    setMark(obj, false);
   }
 
-  void Heap::mark(Object *obj) {
-    if (!getMark(obj)) {
-      setMark(obj, true);
-
-      for (auto iter : obj->listProps()) {
-        auto prop_name(iter.first);
-        auto prop_val(iter.second);
-        // prop names are always either strings or symbols, so objects.
-        mark(prop_name.asObject());
-
-        // prop values may not be, so check!
-        if (prop_val.isObject()) {
-          mark(prop_val.asObject());
-        }
-      }
-    }
+  Object *Heap::newObject(Object *prototype) {
+    auto obj = new Object(this, prototype);
+    registerForGC(obj);
+    return obj;
   }
 
-  void Heap::sweep(Object *obj) {
-    if (getMark(obj)) {
-      // Keep the object, but reset the marker value for next time.
-      setMark(obj, false);
-    } else {
-      // No findable references to this object. Destroy it!
-      objects.erase(obj);
-      marks.erase(obj);
-      delete obj;
-    }
+  String *Heap::newString(const wstring &aStr) {
+    auto str = new String(this, aStr);
+    registerForGC(str);
+    return str;
+  }
+
+  Symbol *Heap::newSymbol(const wstring &aName) {
+    auto sym = new Symbol(this, aName);
+    registerForGC(sym);
+    return sym;
   }
 
   void Heap::gc() {
-    mark(root);
+    root->markForGC();
 
     // Todo: search stack frames / held-live objects
 
-    // Todo: don't require allocating memory to free memory
-    std::vector<Object *> dead_objects;
+    // Todo: don't require allocating memory to free memory!
+    std::vector<GCThing *> dead_objects;
     for (auto obj : objects) {
-      if (getMark(obj)) {
+      if (!obj->isMarkedForGC()) {
         dead_objects.push_back(obj);
       }
     }
     for (auto obj : dead_objects) {
-      sweep(obj);
+      if (obj->isMarkedForGC()) {
+        // Keep the object, but reset the marker value for next time.
+        obj->clearForGC();
+      } else {
+        // No findable references to this object. Destroy it!
+        objects.erase(obj);
+        delete obj;
+      }
     }
   }
 }

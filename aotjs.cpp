@@ -1,8 +1,10 @@
 #include "aotjs_runtime.h"
 
 int main() {
-  auto root = new AotJS::Object();
-  AotJS::Heap heap(root);
+  AotJS::Heap heap;
+
+  auto obj = heap.newObject(nullptr);
+  auto str = heap.newString(L"this is a nice string");
 
   heap.gc();
   return 0;
