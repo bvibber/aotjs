@@ -28,17 +28,21 @@ Safe, small, moderate-performance JS runtime for application extensions.
 * no support for runtime eval() or new Function("source")
 * no in-process resource limits for memory or execution time
 
-
 # Prior art
 
 * found a random old project https://github.com/eddid/jslang
 * pretty out of date, but might have cool ideas?
 
-# Things to compare with
+## Things to compare with
 
+Big engines
 * SpiderMonkey's interpreter mode
 * ChakraCore's interpreter mode
 * V8's interpreter mode
+
+Smaller interpreters
+* duktape
+* jerryscript
 
 # How it might work
 
@@ -55,7 +59,7 @@ Safe, small, moderate-performance JS runtime for application extensions.
 JS values may be of these types:
 * number (double)
 * number (int32_t optimized subset of doubles)
-* string, object (pointer to obj struct)
+* string, symbol, object (pointer to obj struct)
 * null, undefined (special values)
 * boolean (special values)
 
@@ -63,10 +67,6 @@ Many VMs do crazy things like using NaN bits in doubles to signal that the
 64-bit value actually contains an int32_t or pointer instead of a double.
 * todo -- check the NaN rules for WebAssembly if that's something that's safe!
 
-## Garbage collection
-Because JS is garbage-collected, we need to use a GC engine of some kind
-that can link into C.
-* todo -- check out boehmgc and such
 
 ## Exceptions
 
@@ -87,23 +87,33 @@ where safety and download size are more likely important than runtime speed.
 
 ## Garbage collection
 
-Note that the well-known Boehm GC library needs access to stack and may not work?
+Because JS is garbage-collected, we need to use a GC engine of some kind
+that can link into C/C++.
 
-Possibility:
-* start with a GC root (world)
-* maintain a list/refcount of in-scope objects via constructors/destructors of referencess
-* at GC time
+The traditional Boehm libgc seems like it won't work here since it can't
+access the wasm/js stack directly.
+
+I'm trying my own naive mark-and-sweep GC based on maintaining my own
+stack of scope objects.
+
+Each scope contains a pointer to its parent scope, a vector of JS values
+that were passed in as arguments or allocated for locals, and a vector of
+pointers to JS values captured from outer scopes.
+
+The actual 'local variables' used in the compiled functions will be pointers,
+allowing them to be modified in-place in the stack frames by closures, which
+should keep the correct behavior.
+
+The marking phase starts with all our roots (global object and the stack)
+TODO: stack!
 
 
-# Naive implementation thoughts
+# Naive implementation
 
 Let's assume the runtime is implemented in C++. Naive implementation for totally
-polymorphic code looks something like [aotjs_runtime.cpp](aotjs_runtime.cpp)
+polymorphic code looks something like:
+* [aotjs_runtime.h](aotjs_runtime.h)
+* [aotjs_runtime.cpp](aotjs_runtime.cpp)
 
-
-
-
-# Other interpreters
-
-* duktape
-* jerryscript
+Example hand-compiled programs using it:
+* [samples/closure.js](samples/closure.js) -> [samples/closure.cpp](samples/closure.cpp)

@@ -320,9 +320,8 @@ namespace AotJS {
 
   class Engine {
     Object *root;
+    std::vector<Scope *>stack;
     unordered_set<GCThing *> objects;
-    unordered_map<GCThing *, bool> marks;
-
     void registerForGC(GCThing *obj);
 
   public:
@@ -340,7 +339,7 @@ namespace AotJS {
     Scope *newScope(Scope *parent, std::vector<Val> args, std::vector<Val *>captures);
     Scope *newScope(std::vector<Val> args, std::vector<Val *>captures);
 
-    Val call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures);
+    Val call(FunctionBody func, std::vector<Val>args, std::vector<Val *>captures);
 
     void gc();
     string dump();

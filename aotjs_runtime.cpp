@@ -268,13 +268,17 @@ namespace AotJS {
 
   Val Engine::call(FunctionBody func, std::vector<Val> args, std::vector<Val *>captures) {
     auto scope = newScope(args, captures);
-    return func(scope);
+    stack.push_back(scope);
+    auto retval = func(scope);
+    stack.pop_back();
+    return retval;
   }
 
   void Engine::gc() {
     root->markForGC();
-
-    // Todo: search stack frames / held-live objects
+    for (auto scope : stack) {
+      scope->markForGC();
+    }
 
     // Todo: don't require allocating memory to free memory!
     std::vector<GCThing *> dead_objects;
