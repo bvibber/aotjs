@@ -7,11 +7,13 @@ int main() {
 
   auto root = engine.getRoot();
   auto obj = engine.newObject(nullptr);
-  auto name = engine.newString("propname");
-  auto val = engine.newString("propval");
+  auto objname = engine.newString("an_obj");
+  auto propname = engine.newString("propname");
+  auto propval = engine.newString("propval");
   auto unused = engine.newString("unused");
 
-  root->setProp(name, val);
+  obj->setProp(propname, propval);
+  root->setProp(objname, obj);
 
   std::cout << "before gc\n";
   std::cout << engine.dump();
