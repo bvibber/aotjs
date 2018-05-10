@@ -25,6 +25,14 @@ namespace AotJS {
     // just a tag
   };
 
+  class Null {
+    // just a tag
+  };
+
+  // Polymorphic JS values are handled by using 64-bit values with
+  // NaN signalling, so they may contain either a double-precision float
+  // or a typed value with up to a 48-bit pointer or integer payload.
+  //
   class Ref {
     union {
       int64_t val_raw;
@@ -35,16 +43,22 @@ namespace AotJS {
   public:
 
     // 13 bits reserved at top for NaN
-    // 1 bit to mark whether it's a tag
-    // 2 bits to mark subtype
-    // 48 bits at the bottom for pointers (for native x86_64)
-    // 16 bits spare + 32 bits at the bottom for ints
-    static const int64_t tag_mask      = 0xffff000000000000LL;
-    static const int64_t tag_double    = 0xfff8000000000000LL;
-    static const int64_t tag_int32     = 0xfffc000000000000LL;
-    static const int64_t tag_object    = 0xfffd000000000000LL;
-    static const int64_t tag_bool      = 0xfffe000000000000LL;
-    static const int64_t tag_undefined = 0xffff000000000000LL;
+    //   one 0 for the sign bit, haughty on his throne
+    //   eleven 1s for exponent, expanding through the 'verse
+    //   last 1 for the NaN marker, whispered in the night
+    // 3 bits to mark the low-level tag type
+    //   alchemy clouds its mind
+    // 48 bits for payload
+    //   x86_64 needs all 48 bits for pointers
+    //   ints, bools, 32-bit pointers use bottom 32 bits
+    //   null, undefined don't use any of the payload
+    static const int64_t tag_mask      = 0b1111111111111000'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_double    = 0b0111111111111000'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_int32     = 0b0111111111111001'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_object    = 0b0111111111111010'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_bool      = 0b0111111111111011'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_undefined = 0b0111111111111100'0000000000000000'0000000000000000'0000000000000000;
+    static const int64_t tag_null      = 0b0111111111111101'0000000000000000'0000000000000000'0000000000000000;
 
     Ref(const Ref &val) : val_raw(val.raw()) {}
     Ref(double val) : val_double(val) {}
@@ -52,6 +66,7 @@ namespace AotJS {
     Ref(bool val) : val_raw(((int64_t)val & ~tag_mask) | tag_bool) {}
     Ref(Object *val) : val_raw((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
     Ref(Undefined val) : val_raw(tag_undefined) {}
+    Ref(Null val) : val_raw(tag_null) {}
 
     int64_t raw() const {
       return val_raw;
@@ -61,11 +76,11 @@ namespace AotJS {
       return val_raw & tag_mask;
     }
 
-    bool is_double() const {
+    bool isDouble() const {
       return tag() == tag_double;
     }
 
-    bool is_int32() const {
+    bool isInt32() const {
       return tag() == tag_int32;
     }
 
@@ -73,12 +88,16 @@ namespace AotJS {
       return tag() == tag_object;
     }
 
-    bool is_bool() const {
+    bool isBool() const {
       return tag() == tag_bool;
     }
 
-    bool is_undefined() const {
+    bool isUndefined() const {
       return tag() == tag_undefined;
+    }
+
+    bool isNull() const {
+      return tag() == tag_null;
     }
 
     double asDouble() const {
