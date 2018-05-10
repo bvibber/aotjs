@@ -5,7 +5,7 @@
 #include <unordered_set>
 
 namespace AotJS {
-  using ::std::wstring;
+  using ::std::string;
   using ::std::vector;
   using ::std::hash;
   using ::std::unordered_set;
@@ -82,7 +82,9 @@ namespace AotJS {
     Val(double val)     : val_double(val) {}
     Val(int32_t val)    : val_raw(((uint64_t)((int64_t)val) & ~tag_mask) | tag_int32) {}
     Val(bool val)       : val_raw(((uint64_t)val & ~tag_mask) | tag_bool) {}
-    Val(GCThing *val)   : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_bool) {}
+    Val(String *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_string) {}
+    Val(Symbol *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_symbol) {}
+    Val(Object *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_object) {}
     Val(Undefined val)  : val_raw(tag_undefined) {}
     Val(Null val)       : val_raw(tag_null) {}
 
@@ -192,6 +194,8 @@ namespace AotJS {
     }
 
     bool operator==(const Val &rhs) const;
+
+    string dump() const;
   };
 
 }
@@ -218,6 +222,7 @@ namespace AotJS {
     void markForGC();
     void clearForGC();
     virtual void markRefsForGC();
+    virtual string dump();
   };
 
   class Object : public GCThing {
@@ -235,21 +240,21 @@ namespace AotJS {
     }
 
     void markRefsForGC() override;
+    string dump() override;
 
     Type getTypeof() const {
       return typeof_object;
     }
 
     Val getProp(Val name);
-
     void setProp(Val name, Val val);
   };
 
   class String : public GCThing {
-    wstring data;
+    string data;
 
   public:
-    String(Heap *aHeap, wstring const &aStr) :
+    String(Heap *aHeap, string const &aStr) :
       GCThing(aHeap),
       data(aStr)
     {
@@ -260,7 +265,9 @@ namespace AotJS {
       return typeof_string;
     }
 
-    operator wstring() const {
+    string dump() override;
+
+    operator string() const {
       return data;
     }
 
@@ -270,10 +277,10 @@ namespace AotJS {
   };
 
   class Symbol : public GCThing {
-    wstring name;
+    string name;
 
   public:
-    Symbol(Heap *aHeap, wstring const &aName) :
+    Symbol(Heap *aHeap, string const &aName) :
       GCThing(aHeap),
       name(aName)
     {
@@ -284,13 +291,15 @@ namespace AotJS {
       return typeof_string;
     }
 
-    const wstring &getName() const {
+    string dump() override;
+
+    const string &getName() const {
       return name;
     }
   };
 
   class Heap {
-    GCThing *root;
+    Object *root;
     unordered_set<GCThing *> objects;
     unordered_map<GCThing *, bool> marks;
 
@@ -301,10 +310,15 @@ namespace AotJS {
       root = newObject(nullptr);
     }
 
+    Object *getRoot() const {
+      return root;
+    }
+
     Object *newObject(Object *prototype);
-    String *newString(const wstring &aStr);
-    Symbol *newSymbol(const wstring &aName);
+    String *newString(const string &aStr);
+    Symbol *newSymbol(const string &aName);
 
     void gc();
+    string dump();
   };
 }

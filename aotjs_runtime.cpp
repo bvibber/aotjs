@@ -1,5 +1,7 @@
 #include "aotjs_runtime.h"
 
+#include <sstream>
+
 namespace AotJS {
   Type typeof_undefined = "undefined";
   Type typeof_number = "number";
@@ -33,6 +35,28 @@ namespace AotJS {
     return false;
   }
 
+  string Val::dump() const {
+    std::ostringstream buf;
+    if (isDouble()) {
+      buf << asDouble();
+    } else if (isInt32()) {
+      buf << asInt32();
+    } else if (isBool()) {
+      if (asBool()) {
+        buf << "true";
+      } else {
+        buf << "false";
+      }
+    } else if (isNull()) {
+      buf << "null";
+    } else if (isUndefined()) {
+      buf << "undefined";
+    } else if (isGCThing()) {
+      buf << asGCThing()->dump();
+    }
+    return buf.str();
+  }
+
   #pragma mark GCThing
 
   GCThing::GCThing(Heap *aHeap) :
@@ -63,6 +87,10 @@ namespace AotJS {
 
   void GCThing::markRefsForGC() {
     // no-op default
+  }
+
+  string GCThing::dump() {
+    return "GCThing";
   }
 
   #pragma mark Object
@@ -100,6 +128,45 @@ namespace AotJS {
     }
   }
 
+  string Object::dump() {
+    std::ostringstream buf;
+    buf << "{";
+
+    bool first = true;
+    for (auto iter : props) {
+      auto name = iter.first;
+      auto val = iter.second;
+
+      if (first) {
+        first = false;
+      } else {
+        buf << ",";
+      }
+      buf << name.dump();
+      buf << ":";
+      buf << val.dump();
+    }
+    buf << "}";
+    return buf.str();
+  }
+
+  string String::dump() {
+    // todo: emit JSON or something
+    std::ostringstream buf;
+    buf << "\"";
+    buf << data;
+    buf << "\"";
+    return buf.str();
+  }
+
+  string Symbol::dump() {
+    std::ostringstream buf;
+    buf << "Symbol(\"";
+    buf << name;
+    buf << "\")";
+    return buf.str();
+  }
+
   #pragma mark Heap
 
   void Heap::registerForGC(GCThing *obj) {
@@ -112,13 +179,13 @@ namespace AotJS {
     return obj;
   }
 
-  String *Heap::newString(const wstring &aStr) {
+  String *Heap::newString(const string &aStr) {
     auto str = new String(this, aStr);
     registerForGC(str);
     return str;
   }
 
-  Symbol *Heap::newSymbol(const wstring &aName) {
+  Symbol *Heap::newSymbol(const string &aName) {
     auto sym = new Symbol(this, aName);
     registerForGC(sym);
     return sym;
@@ -146,5 +213,22 @@ namespace AotJS {
         delete obj;
       }
     }
+  }
+
+  string Heap::dump() {
+    std::ostringstream buf;
+    buf << "Heap([";
+
+    bool first = true;
+    for (auto obj : objects) {
+      if (first) {
+        first = false;
+      } else {
+        buf << ",";
+      }
+      buf << obj->dump();
+    }
+    buf << "])";
+    return buf.str();
   }
 }
