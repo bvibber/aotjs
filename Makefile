@@ -13,6 +13,9 @@ clean :
 	rm -f aotjs
 	rm -f aotjs.js
 	rm -f aotjs.wasm
+	rm -f aotjs.wasm.map
+	rm -f aotjs.wast
+	rm -rf aotjs.dSYM
 
 aotjs : $(SOURCES) $(HEADERS)
 	clang++ $(CFLAGS) -std=c++14 -o aotjs $(SOURCES)
