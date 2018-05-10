@@ -8,16 +8,16 @@ namespace AotJS {
   Type typeof_object = "object";
 }
 
-#pragma mark Ref hash helpers
+#pragma mark Val hash helpers
 
 namespace std {
-  size_t hash<::AotJS::Ref>::operator()(::AotJS::Ref const& ref) const noexcept {
+  size_t hash<::AotJS::Val>::operator()(::AotJS::Val const& ref) const noexcept {
     return hash<int64_t>{}(ref.raw());
   }
 }
 
 namespace AotJS {
-  bool Ref::operator==(const Ref &rhs) const {
+  bool Val::operator==(const Val &rhs) const {
     // Bit-identical always matches!
     // This catches matching pointers (same object), matching ints, etc.
     if (raw() == rhs.raw()) {
@@ -45,7 +45,7 @@ namespace AotJS {
 
   #pragma mark Object
 
-  Ref Object::getProp(Ref name) {
+  Val Object::getProp(Val name) {
     auto index = props.find(name);
     if (index == props.end()) {
       if (prototype) {
@@ -58,7 +58,7 @@ namespace AotJS {
     }
   }
 
-  void Object::setProp(Ref name, Ref val) {
+  void Object::setProp(Val name, Val val) {
     props.emplace(name, val);
   }
 

@@ -29,13 +29,19 @@ namespace AotJS {
     // just a tag
   };
 
-  // Polymorphic JS values are handled by using 64-bit values with
-  // NaN signalling, so they may contain either a double-precision float
-  // or a typed value with up to a 48-bit pointer or integer payload.
-  //
-  class Ref {
+  ///
+  /// Polymorphic JS values are handled by using 64-bit values with
+  /// NaN signalling, so they may contain either a double-precision float
+  /// or a typed value with up to a 48-bit pointer or integer payload.
+  ///
+  /// This is similar to, but not the same as, the "Pun-boxing" used in
+  /// Mozilla's SpiderMonkey engine:
+  /// * https://github.com/mozilla/gecko-dev/blob/master/js/public/Value.h
+  ///
+  /// May not be optimal for wasm32 yet.
+  class Val {
     union {
-      int64_t val_raw;
+      uint64_t val_raw;
       int32_t val_int32;
       double val_double;
     };
@@ -43,41 +49,53 @@ namespace AotJS {
   public:
 
     // 13 bits reserved at top for NaN
-    //   one 0 for the sign bit, haughty on his throne
+    //   one bit for the sign, haughty on his throne
     //   eleven 1s for exponent, expanding through the 'verse
     //   last 1 for the NaN marker, whispered in the night
     // 3 bits to mark the low-level tag type
     //   alchemy clouds its mind
-    // 48 bits for payload
-    //   x86_64 needs all 48 bits for pointers
+    // up to 48 bits for payload
+    //   x86_64 needs all 48 bits for pointers, or just 47 for user mode...?
+    //   aarch64 may need 48 bits too, and ... isn't signed?
     //   ints, bools, 32-bit pointers use bottom 32 bits
     //   null, undefined don't use any of the payload
-    static const int64_t tag_mask      = 0b1111111111111000'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_double    = 0b0111111111111000'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_int32     = 0b0111111111111001'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_object    = 0b0111111111111010'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_bool      = 0b0111111111111011'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_undefined = 0b0111111111111100'0000000000000000'0000000000000000'0000000000000000;
-    static const int64_t tag_null      = 0b0111111111111101'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t sign_bit       = 0b1000000000000000'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_mask       = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
+    // double cutoff: -Infinity
+    static const uint64_t tag_max_double = 0b1111111111110000'0000000000000000'0000000000000000'0000000000000000;
+    // integer types:
+    static const uint64_t tag_bool       = 0b1111111111111001'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_int32      = 0b1111111111111010'0000000000000000'0000000000000000'0000000000000000;
+    // pointer types:
+    static const uint64_t tag_string     = 0b1111111111111011'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_symbol     = 0b1111111111111100'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_object     = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
+    // tag-only types
+    static const uint64_t tag_null       = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_undefined  = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
 
-    Ref(const Ref &val) : val_raw(val.raw()) {}
-    Ref(double val) : val_double(val) {}
-    Ref(int32_t val) : val_raw(((int64_t)val & ~tag_mask) | tag_int32) {}
-    Ref(bool val) : val_raw(((int64_t)val & ~tag_mask) | tag_bool) {}
-    Ref(Object *val) : val_raw((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
-    Ref(Undefined val) : val_raw(tag_undefined) {}
-    Ref(Null val) : val_raw(tag_null) {}
+    Val(const Val &val) : val_raw(val.raw()) {}
+    Val(double val)     : val_double(val) {}
+    Val(int32_t val)    : val_raw(((uint64_t)((int64_t)val) & ~tag_mask) | tag_int32) {}
+    Val(bool val)       : val_raw(((uint64_t)val & ~tag_mask) | tag_bool) {}
+    Val(Object *val)    : val_raw((reinterpret_cast<uint64_t>(val) & ~tag_mask) | tag_bool) {}
+    Val(Undefined val)  : val_raw(tag_undefined) {}
+    Val(Null val)       : val_raw(tag_null) {}
 
-    int64_t raw() const {
+    uint64_t raw() const {
       return val_raw;
     }
 
-    int64_t tag() const {
+    uint64_t tag() const {
       return val_raw & tag_mask;
     }
 
     bool isDouble() const {
-      return tag() == tag_double;
+      // Saw this trick in SpiderMonkey.
+      // Our tagged values will be > tag_max_double in uint64_t interpretation
+      // Any negative double will be < that
+      // Any positive double, inverted, will be < that
+      return (val_raw | sign_bit) <= tag_max_double;
     }
 
     bool isInt32() const {
@@ -133,14 +151,14 @@ namespace AotJS {
       return undef;
     }
 
-    bool operator==(const Ref &rhs) const;
+    bool operator==(const Val &rhs) const;
   };
 
 }
 
 namespace std {
-  template<> struct hash<::AotJS::Ref> {
-      size_t operator()(::AotJS::Ref const& ref) const noexcept;
+  template<> struct hash<::AotJS::Val> {
+      size_t operator()(::AotJS::Val const& Val) const noexcept;
   };
 }
 
@@ -150,7 +168,7 @@ namespace AotJS {
   class Object {
     Type typeof;
     Object *prototype;
-    unordered_map<Ref,Ref> props;
+    unordered_map<Val,Val> props;
 
     friend class PropList;
 
@@ -160,8 +178,8 @@ namespace AotJS {
       return typeof;
     }
 
-    Ref getProp(Ref name);
-    void setProp(Ref name, Ref val);
+    Val getProp(Val name);
+    void setProp(Val name, Val val);
     PropList listProps();
   };
 
@@ -177,19 +195,19 @@ namespace AotJS {
 
   public:
 
-    unordered_map<Ref,Ref>::iterator begin() noexcept {
+    unordered_map<Val,Val>::iterator begin() noexcept {
       return obj->props.begin();
     }
 
-    unordered_map<Ref,Ref>::const_iterator cbegin() const noexcept {
+    unordered_map<Val,Val>::const_iterator cbegin() const noexcept {
       return obj->props.cbegin();
     }
 
-    unordered_map<Ref,Ref>::iterator end() noexcept {
+    unordered_map<Val,Val>::iterator end() noexcept {
       return obj->props.end();
     }
 
-    unordered_map<Ref,Ref>::const_iterator cend() const noexcept {
+    unordered_map<Val,Val>::const_iterator cend() const noexcept {
       return obj->props.cend();
     }
   };
