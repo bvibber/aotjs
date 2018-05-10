@@ -3,24 +3,24 @@
 #include <iostream>
 
 int main() {
-  AotJS::Heap heap;
+  AotJS::Engine engine;
 
-  auto root = heap.getRoot();
-  auto obj = heap.newObject(nullptr);
-  auto name = heap.newString("propname");
-  auto val = heap.newString("propval");
-  auto unused = heap.newString("unused");
+  auto root = engine.getRoot();
+  auto obj = engine.newObject(nullptr);
+  auto name = engine.newString("propname");
+  auto val = engine.newString("propval");
+  auto unused = engine.newString("unused");
 
   root->setProp(name, val);
 
   std::cout << "before gc\n";
-  std::cout << heap.dump();
+  std::cout << engine.dump();
   std::cout << "\n\n";
 
-  heap.gc();
+  engine.gc();
 
   std::cout << "after gc\n";
-  std::cout << heap.dump();
+  std::cout << engine.dump();
   std::cout << "\n";
 
   return 0;

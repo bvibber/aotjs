@@ -59,12 +59,6 @@ namespace AotJS {
 
   #pragma mark GCThing
 
-  GCThing::GCThing(Heap *aHeap) :
-    heap(aHeap),
-    marked(0)
-  {
-    //
-  }
 
   GCThing::~GCThing() {
     //
@@ -167,31 +161,31 @@ namespace AotJS {
     return buf.str();
   }
 
-  #pragma mark Heap
+  #pragma mark Engine
 
-  void Heap::registerForGC(GCThing *obj) {
+  void Engine::registerForGC(GCThing *obj) {
     objects.insert(obj);
   }
 
-  Object *Heap::newObject(Object *prototype) {
+  Object *Engine::newObject(Object *prototype) {
     auto obj = new Object(this, prototype);
     registerForGC(obj);
     return obj;
   }
 
-  String *Heap::newString(const string &aStr) {
+  String *Engine::newString(const string &aStr) {
     auto str = new String(this, aStr);
     registerForGC(str);
     return str;
   }
 
-  Symbol *Heap::newSymbol(const string &aName) {
+  Symbol *Engine::newSymbol(const string &aName) {
     auto sym = new Symbol(this, aName);
     registerForGC(sym);
     return sym;
   }
 
-  void Heap::gc() {
+  void Engine::gc() {
     root->markForGC();
 
     // Todo: search stack frames / held-live objects
@@ -215,9 +209,9 @@ namespace AotJS {
     }
   }
 
-  string Heap::dump() {
+  string Engine::dump() {
     std::ostringstream buf;
-    buf << "Heap([";
+    buf << "Engine([";
 
     bool first = true;
     for (auto obj : objects) {

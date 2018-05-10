@@ -208,14 +208,20 @@ namespace std {
 
 namespace AotJS {
 
-  class Heap;
+  class Engine;
 
   class GCThing {
-    Heap *heap;
+    Engine *engine;
     bool marked;
 
   public:
-    GCThing(Heap *aHeap);
+    GCThing(Engine *aEngine) :
+      engine(aEngine),
+      marked(0)
+    {
+      //
+    }
+
     virtual ~GCThing();
 
     bool isMarkedForGC();
@@ -232,8 +238,8 @@ namespace AotJS {
     friend class PropList;
 
   public:
-    Object(Heap *aHeap, Object *aPrototype) :
-      GCThing(aHeap),
+    Object(Engine *aEngine, Object *aPrototype) :
+      GCThing(aEngine),
       prototype(aPrototype)
     {
       //
@@ -254,8 +260,8 @@ namespace AotJS {
     string data;
 
   public:
-    String(Heap *aHeap, string const &aStr) :
-      GCThing(aHeap),
+    String(Engine *aEngine, string const &aStr) :
+      GCThing(aEngine),
       data(aStr)
     {
       //
@@ -280,8 +286,8 @@ namespace AotJS {
     string name;
 
   public:
-    Symbol(Heap *aHeap, string const &aName) :
-      GCThing(aHeap),
+    Symbol(Engine *aEngine, string const &aName) :
+      GCThing(aEngine),
       name(aName)
     {
       //
@@ -298,7 +304,7 @@ namespace AotJS {
     }
   };
 
-  class Heap {
+  class Engine {
     Object *root;
     unordered_set<GCThing *> objects;
     unordered_map<GCThing *, bool> marks;
@@ -306,7 +312,7 @@ namespace AotJS {
     void registerForGC(GCThing *obj);
 
   public:
-    Heap() {
+    Engine() {
       root = newObject(nullptr);
     }
 
