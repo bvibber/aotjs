@@ -4,22 +4,28 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace aotjs {
-  typedef const char *aotjs_type;
+namespace AotJS {
+  using ::std::wstring;
+  using ::std::vector;
+  using ::std::hash;
+  using ::std::unordered_set;
+  using ::std::unordered_map;
 
-  extern aotjs_type typeof_undefined;
-  extern aotjs_type typeof_number;
-  extern aotjs_type typeof_boolean;
-  extern aotjs_type typeof_string;
-  extern aotjs_type typeof_object;
+  typedef const char *Type;
 
-  class aotjs_object;
+  extern Type typeof_undefined;
+  extern Type typeof_number;
+  extern Type typeof_boolean;
+  extern Type typeof_string;
+  extern Type typeof_object;
 
-  class aotjs_undefined {
+  class Object;
+
+  class Undefined {
     // just a tag
   };
 
-  class aotjs_ref {
+  class Ref {
     union {
       double val_double;
       int64_t val_int64;
@@ -40,11 +46,11 @@ namespace aotjs {
     static const int64_t tag_bool      = 0xfffe000000000000LL;
     static const int64_t tag_undefined = 0xffff000000000000LL;
 
-    aotjs_ref(double val) : val_double(val) {}
-    aotjs_ref(int32_t val) : val_int64(((int64_t)val & ~tag_mask) | tag_int32) {}
-    aotjs_ref(bool val) : val_int64(((int64_t)val & ~tag_mask) | tag_bool) {}
-    aotjs_ref(aotjs_object *val) : val_int64((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
-    aotjs_ref(aotjs_undefined val) : val_int64(tag_undefined) {}
+    Ref(double val) : val_double(val) {}
+    Ref(int32_t val) : val_int64(((int64_t)val & ~tag_mask) | tag_int32) {}
+    Ref(bool val) : val_int64(((int64_t)val & ~tag_mask) | tag_bool) {}
+    Ref(Object *val) : val_int64((reinterpret_cast<int64_t>(val) & ~tag_mask) | tag_bool) {}
+    Ref(Undefined val) : val_int64(tag_undefined) {}
 
     int64_t raw() const {
       return val_int64;
@@ -62,7 +68,7 @@ namespace aotjs {
       return tag() == tag_int32;
     }
 
-    bool is_object() const {
+    bool isObject() const {
       return tag() == tag_object;
     }
 
@@ -74,135 +80,135 @@ namespace aotjs {
       return tag() == tag_undefined;
     }
 
-    double as_double() const {
+    double asDouble() const {
       // Interpret all bits as double-precision float
       return val_double;
     }
 
-    int32_t as_int32() const {
+    int32_t asInt32() const {
       // Bottom 32 bits are ours for ints.
       return val_int32;
     }
 
-    bool as_bool() const {
+    bool asBool() const {
       // Bottom 1 bit is all we need!
       // But treat it like an int32.
       return (bool)val_int32;
     }
 
-    aotjs_object *as_object() const {
+    Object *asObject() const {
   #if (PTRDIFF_MAX) > 2147483647
     // 64-bit host -- drop the top 16 bits of NaN and tag.
     // Assumes address space has only 48 significant bits
     // but may be signed, as on x86_64.
-    return reinterpret_cast<aotjs_object *>((val_int64 << 16) >> 16);
+    return reinterpret_cast<Object *>((val_int64 << 16) >> 16);
   #else
     // 32 bit host -- bottom bits are ours, like an int.
-    return reinterpret_cast<aotjs_object *>(val_int32);
+    return reinterpret_cast<Object *>(val_int32);
   #endif
     }
 
-    aotjs_undefined as_undefined() const {
-      aotjs_undefined undef;
+    Undefined asUndefined() const {
+      Undefined undef;
       return undef;
     }
 
-    bool operator==(const aotjs_ref &rhs) const;
+    bool operator==(const Ref &rhs) const;
   };
 
 }
 
 namespace std {
-  template<> struct hash<::aotjs::aotjs_ref> {
-      size_t operator()(::aotjs::aotjs_ref const& ref) const noexcept;
+  template<> struct hash<::AotJS::Ref> {
+      size_t operator()(::AotJS::Ref const& ref) const noexcept;
   };
 }
 
-namespace aotjs {
-  class aotjs_proplist;
+namespace AotJS {
+  class PropList;
 
-  class aotjs_object {
-    aotjs_type typeof;
-    aotjs_object *prototype;
-    ::std::unordered_map<aotjs_ref,aotjs_ref> props;
+  class Object {
+    Type typeof;
+    Object *prototype;
+    unordered_map<Ref,Ref> props;
 
-    friend class aotjs_proplist;
+    friend class PropList;
 
   public:
 
-    aotjs_type get_typeof() const {
+    Type getTypeof() const {
       return typeof;
     }
 
-    aotjs_ref get_prop(aotjs_ref name);
-    void set_prop(aotjs_ref name, aotjs_ref val);
-    aotjs_proplist list_props();
+    Ref getProp(Ref name);
+    void setProp(Ref name, Ref val);
+    PropList listProps();
   };
 
-  class aotjs_proplist {
-    aotjs_object *obj;
+  class PropList {
+    Object *obj;
 
-    aotjs_proplist(aotjs_object *obj)
+    PropList(Object *obj)
     : obj(obj) {
       //
     }
 
-  friend class aotjs_object;
+  friend class Object;
 
   public:
 
-    ::std::unordered_map<aotjs_ref,aotjs_ref>::iterator begin() noexcept {
+    unordered_map<Ref,Ref>::iterator begin() noexcept {
       return obj->props.begin();
     }
 
-    ::std::unordered_map<aotjs_ref,aotjs_ref>::const_iterator cbegin() const noexcept {
+    unordered_map<Ref,Ref>::const_iterator cbegin() const noexcept {
       return obj->props.cbegin();
     }
 
-    ::std::unordered_map<aotjs_ref,aotjs_ref>::iterator end() noexcept {
+    unordered_map<Ref,Ref>::iterator end() noexcept {
       return obj->props.end();
     }
 
-    ::std::unordered_map<aotjs_ref,aotjs_ref>::const_iterator cend() const noexcept {
+    unordered_map<Ref,Ref>::const_iterator cend() const noexcept {
       return obj->props.cend();
     }
   };
 
-  class aotjs_string : public aotjs_object {
-    ::std::wstring data;
+  class String : public Object {
+    wstring data;
 
   public:
-    aotjs_string(::std::wstring const &src)
+    String(wstring const &src)
     : data(src) {
       //
     }
 
-    operator ::std::wstring() const {
+    operator wstring() const {
       return data;
     }
 
-    bool operator==(const aotjs_string &rhs) const {
+    bool operator==(const String &rhs) const {
       return data == rhs.data;
     }
   };
 
-  class aotjs_heap {
-    aotjs_object *root;
-    ::std::unordered_set<aotjs_object *> objects;
-    ::std::unordered_map<aotjs_object *, bool> marks;
+  class Heap {
+    Object *root;
+    unordered_set<Object *> objects;
+    unordered_map<Object *, bool> marks;
 
-    bool gc_get_mark(aotjs_object *obj);
-    void gc_set_mark(aotjs_object *obj, bool val);
-    void gc_mark(aotjs_object *obj);
-    void gc_sweep(aotjs_object *obj);
+    bool getMark(Object *obj);
+    void setMark(Object *obj, bool val);
+    void mark(Object *obj);
+    void sweep(Object *obj);
 
   public:
-    aotjs_heap(aotjs_object *aRoot)
+    Heap(Object *aRoot)
     : root(aRoot) {
-      register_object(root);
+      registerObject(root);
     }
 
-    void register_object(aotjs_object *obj);
+    void registerObject(Object *obj);
     void gc();
   };
 }

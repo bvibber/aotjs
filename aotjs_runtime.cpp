@@ -1,42 +1,40 @@
 #include "aotjs_runtime.h"
 
-namespace aotjs {
-  aotjs_type typeof_undefined = "undefined";
-  aotjs_type typeof_number = "number";
-  aotjs_type typeof_boolean = "boolean";
-  aotjs_type typeof_string = "string";
-  aotjs_type typeof_object = "object";
+namespace AotJS {
+  Type typeof_undefined = "undefined";
+  Type typeof_number = "number";
+  Type typeof_boolean = "boolean";
+  Type typeof_string = "string";
+  Type typeof_object = "object";
 }
 
-#pragma mark aotjs_ref hash helpers
+#pragma mark Ref hash helpers
 
 namespace std {
-  size_t hash<::aotjs::aotjs_ref>::operator()(::aotjs::aotjs_ref const& ref) const noexcept {
+  size_t hash<::AotJS::Ref>::operator()(::AotJS::Ref const& ref) const noexcept {
     return hash<int64_t>{}(ref.raw());
   }
 }
 
-#pragma mark aotjs_proplist
-
-namespace aotjs {
-  bool aotjs_ref::operator==(const aotjs_ref &rhs) const {
+namespace AotJS {
+  bool Ref::operator==(const Ref &rhs) const {
     // Bit-identical always matches!
     // This catches matching pointers (same object), matching ints, etc.
     if (raw() == rhs.raw()) {
       return true;
     }
 
-    if (is_object() && rhs.is_object()) {
-      auto obj_l = as_object();
-      auto type_l = obj_l->get_typeof();
+    if (isObject() && rhs.isObject()) {
+      auto obj_l = asObject();
+      auto type_l = obj_l->getTypeof();
 
-      auto obj_r = rhs.as_object();
-      auto type_r = obj_r->get_typeof();
+      auto obj_r = rhs.asObject();
+      auto type_r = obj_r->getTypeof();
 
       if (type_l == typeof_string && type_r == typeof_string) {
         // Two string instances may still be equal.
-        auto str_l = static_cast<aotjs_string *>(obj_l);
-        auto str_r = static_cast<aotjs_string *>(obj_r);
+        auto str_l = static_cast<String *>(obj_l);
+        auto str_r = static_cast<String *>(obj_r);
         return (*str_l) == (*str_r);
       }
     }
@@ -45,33 +43,33 @@ namespace aotjs {
     return false;
   }
 
-  #pragma mark aotjs_object
+  #pragma mark Object
 
-  aotjs_ref aotjs_object::get_prop(aotjs_ref name) {
+  Ref Object::getProp(Ref name) {
     auto index = props.find(name);
     if (index == props.end()) {
       if (prototype) {
-        return prototype->get_prop(name);
+        return prototype->getProp(name);
       } else {
-        return aotjs_undefined();
+        return Undefined();
       }
     } else {
       return index->first;
     }
   }
 
-  void aotjs_object::set_prop(aotjs_ref name, aotjs_ref val) {
+  void Object::setProp(Ref name, Ref val) {
     props.insert_or_assign(name, val);
   }
 
-  aotjs_proplist aotjs_object::list_props() {
-    aotjs_proplist props = this;
+  PropList Object::listProps() {
+    PropList props = this;
     return props;
   }
 
-  #pragma mark aotjs_heap
+  #pragma mark Heap
 
-  bool aotjs_heap::gc_get_mark(aotjs_object *obj) {
+  bool Heap::getMark(Object *obj) {
     auto mark = marks.find(obj);
     if (mark->first) {
       return mark->second;
@@ -80,35 +78,35 @@ namespace aotjs {
     }
   }
 
-  void aotjs_heap::gc_set_mark(aotjs_object *obj, bool val) {
+  void Heap::setMark(Object *obj, bool val) {
     marks.insert_or_assign(obj, val);
   }
 
-  void aotjs_heap::register_object(aotjs_object *obj) {
+  void Heap::registerObject(Object *obj) {
     objects.insert(obj);
-    gc_set_mark(obj, false);
+    setMark(obj, false);
   }
 
-  void aotjs_heap::gc_mark(aotjs_object *obj) {
-    if (!gc_get_mark(obj)) {
-      gc_set_mark(obj, true);
+  void Heap::mark(Object *obj) {
+    if (!getMark(obj)) {
+      setMark(obj, true);
 
-      for (auto [prop_name, prop_val] : obj->list_props()) {
+      for (auto [prop_name, prop_val] : obj->listProps()) {
         // prop names are always either strings or symbols, so objects.
-        gc_mark(prop_name.as_object());
+        mark(prop_name.asObject());
 
         // prop values may not be, so check!
-        if (prop_val.is_object()) {
-          gc_mark(prop_val.as_object());
+        if (prop_val.isObject()) {
+          mark(prop_val.asObject());
         }
       }
     }
   }
 
-  void aotjs_heap::gc_sweep(aotjs_object *obj) {
-    if (gc_get_mark(obj)) {
+  void Heap::sweep(Object *obj) {
+    if (getMark(obj)) {
       // Keep the object, but reset the marker value for next time.
-      gc_set_mark(obj, false);
+      setMark(obj, false);
     } else {
       // No findable references to this object. Destroy it!
       objects.erase(obj);
@@ -117,20 +115,20 @@ namespace aotjs {
     }
   }
 
-  void aotjs_heap::gc() {
-    gc_mark(root);
+  void Heap::gc() {
+    mark(root);
 
     // Todo: search stack frames / held-live objects
 
     // Todo: don't require allocating memory to free memory
-    std::vector<aotjs_object *> dead_objects;
+    std::vector<Object *> dead_objects;
     for (auto obj : objects) {
-      if (gc_get_mark(obj)) {
+      if (getMark(obj)) {
         dead_objects.push_back(obj);
       }
     }
     for (auto obj : dead_objects) {
-      gc_sweep(obj);
+      sweep(obj);
     }
   }
 }
