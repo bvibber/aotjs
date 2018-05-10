@@ -1,0 +1,7 @@
+*.dSYM
+aotjs
+aotjs.js
+aotjs.wasm
+aotjs.wast
+aotjs.wasm.map
+barf
