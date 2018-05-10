@@ -297,10 +297,8 @@ namespace AotJS {
     void registerForGC(GCThing *obj);
 
   public:
-    Heap() :
-      root(newObject(nullptr))
-    {
-      registerForGC(root);
+    Heap() {
+      root = newObject(nullptr);
     }
 
     Object *newObject(Object *prototype);

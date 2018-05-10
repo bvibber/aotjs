@@ -1,7 +1,7 @@
 SOURCES=aotjs_runtime.cpp aotjs.cpp
 HEADERS=aotjs_runtime.h
-#CFLAGS=-g
-CFLAGS=-O2
+CFLAGS=-g
+#CFLAGS=-O2
 
 all : native
 
