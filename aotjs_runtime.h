@@ -27,9 +27,9 @@ namespace AotJS {
 
   class Ref {
     union {
-      double val_double;
       int64_t val_raw;
       int32_t val_int32;
+      double val_double;
     };
 
   public:
@@ -38,7 +38,7 @@ namespace AotJS {
     // 1 bit to mark whether it's a tag
     // 2 bits to mark subtype
     // 48 bits at the bottom for pointers (for native x86_64)
-    // 16 bits apare + 32 bits at the bottom for ints
+    // 16 bits spare + 32 bits at the bottom for ints
     static const int64_t tag_mask      = 0xffff000000000000LL;
     static const int64_t tag_double    = 0xfff8000000000000LL;
     static const int64_t tag_int32     = 0xfffc000000000000LL;
