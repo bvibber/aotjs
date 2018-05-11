@@ -53,8 +53,7 @@ int main() {
   auto func = engine.newFunction(
     work_body,
     "work",
-    1,       // argument count
-    {}       // no captures
+    1
   );
 
   auto retval = engine.call(func, Null(), {engine.root()});

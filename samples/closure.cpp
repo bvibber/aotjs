@@ -73,8 +73,7 @@ int main() {
   auto work = engine.newFunction(
     work_body,
     "work",
-    1,       // argument count
-    {}       // no captures
+    1       // argument count
   );
 
   engine.call(work, Null(), {});
