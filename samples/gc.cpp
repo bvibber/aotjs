@@ -1,4 +1,4 @@
-#include "aotjs_runtime.h"
+#include "../aotjs_runtime.h"
 
 #include <iostream>
 

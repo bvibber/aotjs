@@ -441,6 +441,9 @@ namespace AotJS {
       return mName;
     }
 
+    ///
+    /// Number of defined arguments
+    ///
     size_t arity() const {
       return mArity;
     }
@@ -465,6 +468,7 @@ namespace AotJS {
     Frame *mParent;
     Function *mFunc;
     Val mThis;
+    size_t mArity;
     std::vector<Val> mArgs;
 
   public:
@@ -476,10 +480,12 @@ namespace AotJS {
       mParent(aParent),
       mFunc(aFunc),
       mThis(aThis),
+      mArity(aArgs.size()),
       mArgs(aArgs)
     {
-      // Guarantee the expected arg count is always there
-      // todo: implement default parameters
+      // Guarantee the expected arg count is always there,
+      // reserving space and initializing them.
+      // todo: implement es6 default parameters
       while (mArgs.size() < mFunc->arity()) {
         mArgs.push_back(Undefined());
       }
@@ -495,8 +501,22 @@ namespace AotJS {
       return mFunc;
     }
 
+    ///
+    /// Get a pointer to the first argument.
+    ///
+    /// Guaranteed to be valid up to the number of expected arguments
+    /// from the function's arity, even if the actual argument arity
+    /// is lower.
+    ///
     Val *args() {
       return mArgs.data();
+    }
+
+    ///
+    /// Return the actual number of arguments passed.
+    ///
+    size_t arity() {
+      return mArity;
     }
 
     void markRefsForGC() override;
@@ -551,6 +571,13 @@ namespace AotJS {
       std::string aName,
       size_t aArity,
       std::vector<Val *> aCaptures);
+    Function *newFunction(
+      FunctionBody aBody,
+      std::string aName,
+      size_t aArity);
+    Function *newFunction(
+      FunctionBody aBody,
+      std::string aName);
 
     Scope *pushScope(size_t aLocalCount);
     void popScope();

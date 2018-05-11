@@ -326,6 +326,21 @@ namespace AotJS {
     return func;
   }
 
+  Function *Engine::newFunction(
+    FunctionBody aBody,
+    std::string aName,
+    size_t aArity)
+  {
+    return newFunction(aBody, aName, aArity, {});
+  }
+
+  Function *Engine::newFunction(
+    FunctionBody aBody,
+    std::string aName)
+  {
+    return newFunction(aBody, aName, 0);
+  }
+
   Scope *Engine::newScope(size_t aLocalCount) {
     auto scope = new Scope(mScope, aLocalCount);
     registerForGC(scope);
