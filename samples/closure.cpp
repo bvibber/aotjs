@@ -4,20 +4,20 @@
 
 using namespace AotJS;
 
-Val work(Engine *engine, Function *func, Frame *frame);
-Val work_func(Engine *engine, Function *func, Frame *frame);
+Val work_body(Engine *engine, Function *func, Frame *frame);
+Val func_body(Engine *engine, Function *func, Frame *frame);
 
-Val work(Engine *engine, Function *func, Frame *frame) {
-  auto captures = func->captures();
+Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
+  // Get our captures, if any.
+  auto captures = aFunc->captures();
 
   // Get our arguments, if any.
-  // Fill them out to the expected minimum number.
-  auto args = frame->args();
+  auto args = aFrame->args();
 
   // Variable hoisting!
   // Conceptually we allocate all the locals at the start of the scope.
   // They'll all be filled with the JS `undefined` value initially.
-  auto scope = engine->newScope(4);
+  auto scope = aEngine->pushScope(4);
   auto locals = scope->locals();
 
   // Pull the locals in as pointers into the scope's locals array.
@@ -31,37 +31,34 @@ Val work(Engine *engine, Function *func, Frame *frame) {
   // function declarations happen at the top of the scope too.
   // This is where we capture the `b` variable's location, knowing
   // its actual value can change.
-  *func = engine->newFunction(
-    scope,     // parent scope
-    work_func, // implementatoin
+  *func = aEngine->newFunction(
+    func_body, // implementation
     "func",    // name
     0,         // arity
     {b}        // captures
   );
 
   // Now we get to the body of the function:
-  *a = engine->newString("a");
-  *b = engine->newString("b");
+  *a = aEngine->newString("a");
+  *b = aEngine->newString("b");
 
   std::cout << "should say 'b': " << b->dump() << "\n";
 
   // Make the call!
-  auto retval = engine->call(*func, Null(), {});
+  auto retval = aEngine->call(*func, Null(), {});
 
   // should say "b plus one"
   std::cout << "should say 'b plus one': " << b->dump() << "\n";
 
-  engine->popScope(scope);
+  aEngine->popScope();
   return Undefined();
 }
 
 // The closure function...
-Val work_func(Engine *engine, Scope *scope) {
-  auto args = scope->args();
-  auto captures = scope->captures();
-
-  // vars
-  auto b = &captures[0];
+Val func_body(Engine *engine, Function *func, Frame *frame) {
+  // Unlike the locals and args arrays, captures gives you a ptr to a ptr
+  auto captures = func->captures();
+  auto b = captures[0];
 
   // replace the variable in the parent scope
   *b = engine->newString("b plus one");
@@ -72,7 +69,15 @@ Val work_func(Engine *engine, Scope *scope) {
 int main() {
   AotJS::Engine engine;
 
-  engine.call(work, {}, {});
+  // Register the function!
+  auto work = engine.newFunction(
+    work_body,
+    "work",
+    1,       // argument count
+    {}       // no captures
+  );
+
+  engine.call(work, Null(), {});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();

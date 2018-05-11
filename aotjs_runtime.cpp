@@ -80,7 +80,7 @@ namespace AotJS {
     //
   }
 
-  Typeof JSThing::typeof() {
+  Typeof JSThing::typeof() const {
     return "invalid-jsthing";
   }
 
@@ -88,6 +88,10 @@ namespace AotJS {
     return "JSThing";
   }
 
+  #pragma mark PropIndex
+  PropIndex::~PropIndex() {
+    //
+  }
 
   #pragma mark Object
 
@@ -95,7 +99,7 @@ namespace AotJS {
     //
   }
 
-  Typeof Object::typeof() {
+  Typeof Object::typeof() const {
     return typeof_object;
   }
 
@@ -107,7 +111,7 @@ namespace AotJS {
     } else {
       // todo: convert to string
       // hrm, we need a ref to an engine for that?
-      std::abort(1);
+      std::abort();
       return Undefined();
     }
   }
@@ -128,17 +132,13 @@ namespace AotJS {
     }
   }
 
-  void Object::setProp(Val name, Val val) {
+  void Object::setProp(Val aName, Val aVal) {
     auto name = normalizePropName(aName);
-      props.emplace(name, val);
-    } else {
-      // todo: throw exception
-      std::abort(1);
-    }
+    mProps.emplace(name, aVal);
   }
 
   void Object::markRefsForGC() {
-    for (auto iter : props) {
+    for (auto iter : mProps) {
       auto prop_name(iter.first);
       auto prop_val(iter.second);
 
@@ -158,7 +158,7 @@ namespace AotJS {
     buf << "{";
 
     bool first = true;
-    for (auto iter : props) {
+    for (auto iter : mProps) {
       auto name = iter.first;
       auto val = iter.second;
 
@@ -181,8 +181,7 @@ namespace AotJS {
     //
   }
 
-  Typeof String::typeof() {
-  {
+  Typeof String::typeof() const {
     return typeof_string;
   }
 
@@ -224,9 +223,9 @@ namespace AotJS {
       mParent->markRefsForGC();
     }
 
-    for (auto local : locals) {
-      if (local.isGCThing()) {
-        local.asGCThing()->markRefsForGC();
+    for (auto local : mLocals) {
+      if (local.isJSThing()) {
+        local.asJSThing()->markRefsForGC();
       }
     }
   }
@@ -243,28 +242,49 @@ namespace AotJS {
     //
   }
 
-  Frame::markRefsForGC() {
+  void Frame::markRefsForGC() {
     if (mParent) {
       mParent->markRefsForGC();
     }
 
     mFunc->markRefsForGC();
 
-    if (mThis.isGCThing()) {
-      mThis.asGCThing()->markRefsForGC();
+    if (mThis.isJSThing()) {
+      mThis.asJSThing()->markRefsForGC();
     }
 
     for (auto val : mArgs) {
-      if (val.isGCThing()) {
-        val.asGCThing()->markRefsForGC();
+      if (val.isJSThing()) {
+        val.asJSThing()->markRefsForGC();
       }
     }
+  }
+
+  #pragma mark Function
+
+  Function::~Function() {
+    //
+  }
+
+  void Function::markRefsForGC() {
+    if (mScope) {
+      mScope->markRefsForGC();
+    }
+  }
+
+  string Function::dump() {
+    std::ostringstream buf;
+    buf << "Function(" << name() << ")";
+    return buf.str();
   }
 
   #pragma mark Engine
 
   void Engine::registerForGC(GCThing *obj) {
-    objects.insert(obj);
+    // Because we don't yet control the allocation, we don't know how to walk
+    // the heap looking for all objects. Instead, we need to keep a separate
+    // set of all objects in order to do the final sweep.
+    mObjects.insert(obj);
   }
 
   Object *Engine::newObject(Object *prototype) {
@@ -285,24 +305,77 @@ namespace AotJS {
     return sym;
   }
 
-  Scope *Engine::newScope(Scope *aParent, size_t aLocalCount) {
-    auto scope = new Scope(aParent, aLocalCount);
+  Function *Engine::newFunction(
+    FunctionBody aBody,
+    std::string aName,
+    size_t aArity,
+    std::vector<Val *>aCaptures)
+  {
+    auto func = new Function(mScope, aBody, aName, aArity, aCaptures);
+    registerForGC(func);
+    return func;
+  }
+
+  Scope *Engine::newScope(size_t aLocalCount) {
+    auto scope = new Scope(mScope, aLocalCount);
     registerForGC(scope);
     return scope;
+  }
+
+  Scope *Engine::pushScope(size_t aLocalCount) {
+    auto scope = newScope(aLocalCount);
+    mScope = scope;
+    return scope;
+  }
+
+  void Engine::popScope() {
+    if (mScope) {
+      mScope = mScope->parent();
+    } else {
+      // this should not happen
+      std::abort();
+    }
+  }
+
+  Frame *Engine::newFrame(
+    Function *aFunc,
+    Val aThis,
+    std::vector<Val> aArgs)
+  {
+    auto frame = new Frame(mFrame, aFunc, aThis, aArgs);
+    registerForGC(frame);
+    return frame;
+  }
+
+  Frame *Engine::pushFrame(
+    Function *aFunc,
+    Val aThis,
+    std::vector<Val> aArgs)
+  {
+    auto frame = newFrame(aFunc, aThis, aArgs);
+    mFrame = frame;
+    return frame;
+  }
+
+  void Engine::popFrame() {
+    if (mFrame) {
+      mFrame = mFrame->parent();
+    } else {
+      // should not happen!
+      std::abort();
+    }
   }
 
   Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
     if (aFunc.isFunction()) {
       auto func = aFunc.asFunction();
-      auto frame = newFrame(func, aThis, aArgs);
-
-      stack.push_back(frame);
-      auto retval = func->body()(this, func->scope(), frame);
-      stack.pop_back();
-
+      auto frame = pushFrame(func, aThis, aArgs);
+      auto retval = func->body()(this, func, frame);
+      popFrame();
       return retval;
     } else {
-      std::abort(1);
+      // todo do something
+      std::abort();
     }
   }
 

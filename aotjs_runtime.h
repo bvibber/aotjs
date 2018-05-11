@@ -28,8 +28,11 @@ namespace AotJS {
   class Frame;
 
   class JSThing;
+
+  class PropIndex;
   class String;
   class Symbol;
+
   class Object;
   class Engine;
   class Function;
@@ -42,7 +45,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Val (*FunctionBody)(Engine *engine, Scope *scope, Frame *frame);
+  typedef Val (*FunctionBody)(Engine *engine, Function *func, Frame *frame);
 
   ///
   /// Base class for an item that can be garbage-collected and may
@@ -93,7 +96,10 @@ namespace AotJS {
       //
     }
 
-    virtual ~JSThing();
+    ~JSThing() override;
+
+    string dump() override;
+
     virtual Typeof typeof() const;
   };
 
@@ -273,11 +279,65 @@ namespace AotJS {
 
 namespace std {
   template<> struct hash<::AotJS::Val> {
-      size_t operator()(::AotJS::Val const& Val) const noexcept;
+    size_t operator()(::AotJS::Val const& ref) const noexcept;
   };
 }
 
 namespace AotJS {
+
+  class PropIndex : public JSThing {
+  public:
+    PropIndex() {}
+
+    ~PropIndex() override;
+  };
+
+  class String : public PropIndex {
+    string data;
+
+  public:
+    String(string const &aStr)
+    :
+      data(aStr)
+    {
+      //
+    }
+
+    ~String() override;
+
+    Typeof typeof() const override;
+
+    string dump() override;
+
+    operator string() const {
+      return data;
+    }
+
+    bool operator==(const String &rhs) const {
+      return data == rhs.data;
+    }
+  };
+
+  class Symbol : public PropIndex {
+    string name;
+
+  public:
+    Symbol(string const &aName) :
+      name(aName)
+    {
+      //
+    }
+
+    ~Symbol() override;
+
+    Typeof typeof() const override;
+
+    string dump() override;
+
+    const string &getName() const {
+      return name;
+    }
+  };
 
   ///
   /// Represents a regular JavaScript object, with properties and
@@ -309,53 +369,6 @@ namespace AotJS {
     void setProp(Val name, Val val);
   };
 
-  class String : public JSThing {
-    string data;
-
-  public:
-    String(string const &aStr)
-    :
-      data(aStr)
-    {
-      //
-    }
-
-    ~String() override;
-
-    Typeof typeof() const override;
-
-    string dump() override;
-
-    operator string() const {
-      return data;
-    }
-
-    bool operator==(const String &rhs) const {
-      return data == rhs.data;
-    }
-  };
-
-  class Symbol : public JSThing {
-    string name;
-
-  public:
-    Symbol(string const &aName) :
-      name(aName)
-    {
-      //
-    }
-
-    ~Symbol() override;
-
-    Typeof typeof() const override;
-
-    string dump() override;
-
-    const string &getName() const {
-      return name;
-    }
-  };
-
   ///
   /// Represents a JS scope.
   /// Contains local variables, and references the outer scopes.
@@ -375,6 +388,14 @@ namespace AotJS {
       //
     }
 
+    Val *locals() {
+      return mLocals.data();
+    }
+
+    Scope *parent() const {
+      return mParent;
+    }
+
     void markRefsForGC() override;
     string dump() override;
   };
@@ -383,7 +404,7 @@ namespace AotJS {
   /// Represents a runtime function object.
   /// References the
   ///
-  class Function : public GCThing {
+  class Function : public JSThing {
     Scope *mScope;
     FunctionBody mBody;
     std::string mName;
@@ -395,7 +416,7 @@ namespace AotJS {
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      std::vector<Val *>aCaptures)
+      std::vector<Val *> aCaptures)
     :
       mScope(aScope),
       mBody(aBody),
@@ -406,12 +427,22 @@ namespace AotJS {
       //
     }
 
+    ~Function() override;
+
+    std::string name() const {
+      return mName;
+    }
+
     size_t arity() const {
       return mArity;
     }
 
     FunctionBody body() const {
       return mBody;
+    }
+
+    Val **captures() {
+      return mCaptures.data();
     }
 
     void markRefsForGC() override;
@@ -479,6 +510,12 @@ namespace AotJS {
     unordered_set<GCThing *> mObjects;
     void registerForGC(GCThing *aObj);
 
+    Scope *newScope(size_t aLocalCount);
+
+    Frame *newFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
+    Frame *pushFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
+    void popFrame();
+
   public:
     Engine()
     :
@@ -499,18 +536,16 @@ namespace AotJS {
 
     Symbol *newSymbol(const string &aName);
 
-    Function *newFunction(Scope *aScope,
+    Function *newFunction(
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      std::vector<Val *>aCaptures);
+      std::vector<Val *> aCaptures);
 
-    Scope *newScope(Scope *aParent, size_t aLocalCount);
+    Scope *pushScope(size_t aLocalCount);
+    void popScope();
 
-    Frame *newFrame(Frame *aParent,
-      Function *aFunc,
-      Val aThis,
-      std::vector<Val> aArgs);
+    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
 
     void gc();
     string dump();

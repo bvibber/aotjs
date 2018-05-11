@@ -4,15 +4,23 @@
 
 using namespace AotJS;
 
-Val work(Engine *engine, Function *func, Frame *frame) {
+Val work_body(Engine *engine, Function *func, Frame *frame) {
+  // Fetch the argument list. The function arity must be correct!
+  // Attempting to read beyond the actual number will be invalid.
+  // Can skip this call if no references to args.
   auto args = frame->args();
-  auto locals = scope->locals();
   auto root = &args[0];
-  auto obj = &args[1];
-  auto objname = &args[2];
-  auto propname = &args[3];
-  auto propval = &args[4];
-  auto unused = &args[5];
+
+  // Open a scope with local variables.
+  // Can skip this call if no references to args.
+  auto scope = engine->pushScope(5);
+
+  auto locals = scope->locals();
+  auto obj = &locals[0];
+  auto objname = &locals[1];
+  auto propname = &locals[2];
+  auto propval = &locals[3];
+  auto unused = &locals[4];
 
   *obj = engine->newObject(nullptr);
   *objname = engine->newString("an_obj");
@@ -26,6 +34,10 @@ Val work(Engine *engine, Function *func, Frame *frame) {
 
   root->asObject()->setProp(objname, obj);
 
+  // We could do this with a destructor too, but if we generate LLVM
+  // bitcode directly we'll have to do that manually anyway.
+  engine->popScope();
+
   return Undefined();
 }
 
@@ -34,14 +46,13 @@ int main() {
 
   // Register the function!
   auto func = engine.newFunction(
-    engine.newScope(nullptr, 5),
-    work,
+    work_body,
     "work",
-    1,
-    {}
+    1,       // argument count
+    {}       // no captures
   );
 
-  auto retval = engine.call(func, {engine.getRoot()});
+  auto retval = engine.call(func, Null(), {engine.root()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();
