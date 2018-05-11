@@ -1,6 +1,7 @@
 SOURCES=aotjs_runtime.cpp
 HEADERS=aotjs_runtime.h
-CFLAGS=-g -O0 -std=c++14
+#CFLAGS=-g -O0 -std=c++14
+CFLAGS=-O2 -std=c++14
 CFLAGS_NATIVE=$(CFLAGS)
 CFLAGS_WASM=$(CFLAGS) -s WASM=1 -s BINARYEN_TRAP_MODE=clamp
 
@@ -32,7 +33,7 @@ aotjs : aotjs.cpp $(SOURCES) $(HEADERS)
 closure : samples/closure.cpp $(SOURCES) $(HEADERS)
 	clang++ $(CFLAGS_NATIVE) -o closure samples/closure.cpp $(SOURCES)
 
-aotjs.js : $(SOURCES) $(HEADERS)
+aotjs.js : aotjs.cpp $(SOURCES) $(HEADERS)
 	em++ $(CFLAGS_WASM) -o aotjs.html aotjs.cpp $(SOURCES)
 
 closure.js : samples/closure.cpp $(SOURCES) $(HEADERS)

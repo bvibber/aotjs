@@ -13,7 +13,7 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
 
   // Open a scope with local variables.
   // Can skip this call if no locals are used?
-  auto scope = engine->pushScope(5);
+  auto scope = engine->pushScope(6);
 
   auto locals = scope->locals();
   auto obj = &locals[0];
@@ -21,12 +21,17 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
   auto propname = &locals[2];
   auto propval = &locals[3];
   auto unused = &locals[4];
+  auto notpropname = &locals[5];
 
   *obj = engine->newObject(nullptr);
   *objname = engine->newString("an_obj");
   *propname = engine->newString("propname");
   *propval = engine->newString("propval");
   *unused = engine->newString("unused");
+
+  // This string is a different instance from the earlier "propname" one,
+  // and should not survive GC.
+  *notpropname = engine->newString(std::string("prop") + std::string("name"));
 
   // Retain a couple strings on an object
   // @todo this would be done with a wrapper interface probably
