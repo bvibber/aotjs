@@ -159,6 +159,11 @@ namespace AotJS {
     Val(Symbol *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_symbol) {}
     Val(Object *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
 
+    Val &operator=(const Val &aVal) {
+      mRaw = aVal.mRaw;
+      return *this;
+    }
+
     uint64_t raw() const {
       return mRaw;
     }

@@ -1,10 +1,14 @@
 *.dSYM
 aotjs
+aotjs.html
 aotjs.js
 aotjs.wasm
 aotjs.wast
 aotjs.wasm.map
 barf
 closure
+closure.html
 closure.js
 closure.wasm
+closure.wast
+closure.wasm.map

@@ -16,7 +16,7 @@ namespace AotJS {
 
 namespace std {
   size_t hash<::AotJS::Val>::operator()(::AotJS::Val const& ref) const noexcept {
-    return hash<int64_t>{}(ref.raw());
+    return hash<uint64_t>{}(ref.raw());
   }
 }
 
