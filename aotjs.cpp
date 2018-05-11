@@ -30,9 +30,9 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
 
   // Retain a couple strings on an object
   // @todo this would be done with a wrapper interface probably
-  obj->asObject()->setProp(propname, propval);
+  obj->asObject()->setProp(*propname, *propval);
 
-  root->asObject()->setProp(objname, obj);
+  root->asObject()->setProp(*objname, *obj);
 
   // We could do this with a destructor too, but if we generate LLVM
   // bitcode directly we'll have to do that manually anyway.

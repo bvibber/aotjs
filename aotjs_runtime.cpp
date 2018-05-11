@@ -266,6 +266,10 @@ namespace AotJS {
     //
   }
 
+  Typeof Function::typeof() const {
+    return typeof_function;
+  }
+
   void Function::markRefsForGC() {
     if (mScope) {
       mScope->markRefsForGC();

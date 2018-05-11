@@ -211,7 +211,7 @@ namespace AotJS {
 
     bool isFunction() const {
       // currently no room for a separate function type. not sure about this.
-      return isJSThing() && asJSThing()->typeof() == typeof_function;
+      return isJSThing() && (asJSThing()->typeof() == typeof_function);
     }
 
     double asDouble() const {
@@ -267,7 +267,7 @@ namespace AotJS {
     }
 
     Function *asFunction() const {
-      return static_cast<Function *>(asFunction());
+      return static_cast<Function *>(asPointer());
     }
 
     bool operator==(const Val &rhs) const;
@@ -404,7 +404,7 @@ namespace AotJS {
   /// Represents a runtime function object.
   /// References the
   ///
-  class Function : public JSThing {
+  class Function : public Object {
     Scope *mScope;
     FunctionBody mBody;
     std::string mName;
@@ -418,6 +418,7 @@ namespace AotJS {
       size_t aArity,
       std::vector<Val *> aCaptures)
     :
+      Object(nullptr), // todo: have a function prototype object!
       mScope(aScope),
       mBody(aBody),
       mName(aName),
@@ -428,6 +429,8 @@ namespace AotJS {
     }
 
     ~Function() override;
+
+    Typeof typeof() const override;
 
     std::string name() const {
       return mName;
