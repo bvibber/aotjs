@@ -155,7 +155,7 @@ namespace AotJS {
 
   string Object::dump() {
     std::ostringstream buf;
-    buf << "{";
+    buf << "Object({";
 
     bool first = true;
     for (auto iter : mProps) {
@@ -171,7 +171,7 @@ namespace AotJS {
       buf << ":";
       buf << val.dump();
     }
-    buf << "}";
+    buf << "})";
     return buf.str();
   }
 
@@ -260,6 +260,12 @@ namespace AotJS {
     }
   }
 
+  string Frame::dump() {
+    std::ostringstream buf;
+    buf << "Frame(...)";
+    return buf.str();
+  }
+
   #pragma mark Function
 
   Function::~Function() {
@@ -278,7 +284,7 @@ namespace AotJS {
 
   string Function::dump() {
     std::ostringstream buf;
-    buf << "Function(" << name() << ")";
+    buf << "Function(\"" << name() << "\")";
     return buf.str();
   }
 

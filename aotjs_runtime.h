@@ -485,6 +485,8 @@ namespace AotJS {
       }
     }
 
+    ~Frame() override;
+
     Frame *parent() const {
       return mParent;
     }
@@ -497,8 +499,8 @@ namespace AotJS {
       return mArgs.data();
     }
 
-    ~Frame() override;
     void markRefsForGC() override;
+    string dump() override;
   };
 
   ///

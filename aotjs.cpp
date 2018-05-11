@@ -12,7 +12,7 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
   auto root = &args[0];
 
   // Open a scope with local variables.
-  // Can skip this call if no references to args.
+  // Can skip this call if no locals are used?
   auto scope = engine->pushScope(5);
 
   auto locals = scope->locals();
