@@ -529,11 +529,11 @@ namespace AotJS {
   public:
     Engine()
     :
-      mRoot(newObject(nullptr)),
+      mRoot(nullptr),
       mScope(nullptr),
       mFrame(nullptr)
     {
-      //
+      mRoot = newObject(nullptr);
     }
 
     Object *root() const {
