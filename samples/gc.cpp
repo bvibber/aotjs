@@ -48,7 +48,7 @@ int main() {
     // no scope capture
   );
 
-  auto retval = engine.call(func, Null(), {(Val)&engine.root()});
+  auto retval = engine.call(func, Null(), {engine.root()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();
