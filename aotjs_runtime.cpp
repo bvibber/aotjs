@@ -252,12 +252,6 @@ namespace AotJS {
     if (mThis.isJSThing()) {
       mThis.asJSThing().markRefsForGC();
     }
-
-    for (auto val : mLocals) {
-      if (val.isJSThing()) {
-        val.asJSThing().markRefsForGC();
-      }
-    }
   }
 
   string Frame::dump() {
@@ -347,7 +341,15 @@ namespace AotJS {
       mFrame->markForGC();
     }
 
+    // Check for anything held open by stack frames in a Local.
+    for (auto obj : mObjects) {
+      if (obj->isReferenced()) {
+        obj->markForGC();
+      }
+    }
+
     // 2) Sweep!
+    // We alloc a vector here ebecause we can't change the set while iterating.
     // Todo: don't require allocating memory to free memory!
     std::vector<GCThing *> deadObjects;
     for (auto obj : mObjects) {

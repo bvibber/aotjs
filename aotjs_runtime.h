@@ -94,17 +94,49 @@ namespace AotJS {
   /// Not necessarily exposed to JS.
   ///
   class GCThing {
+    ///
+    /// Reference count for stack-frame-based refs via Local.
+    /// If count is non-zero, GC treats object as referenced
+    /// and keeps it alive.
+    ///
+    /// This is needed because there's no way to introspect
+    /// native WebAssembly stack frames for their local values.
+    ///
+    size_t mRefCount;
+
+    ///
+    /// GC mark state -- normally false, except during GC marking
+    /// when it records true if the object is reachable.
+    ///
     bool mMarked;
 
   public:
     GCThing(Engine& aEngine)
     :
+      mRefCount(0),
       mMarked(false)
     {
+      // We need a set of *all* allocated objects to do sweep.
+      // todo: put this in the allocator?
       aEngine.registerForGC(*this);
     }
 
     virtual ~GCThing();
+
+    // To be called only by Local...
+    void retain() {
+      mRefCount++;
+    }
+
+    void release() {
+      mRefCount--;
+    }
+
+    // To be called only by Engine...
+
+    bool isReferenced() const {
+      return mRefCount > 0;
+    }
 
     bool isMarkedForGC() const {
       return mMarked;
@@ -123,6 +155,7 @@ namespace AotJS {
 
     virtual void markRefsForGC();
 
+    // Really public!
     virtual string dump();
   };
 
@@ -325,6 +358,99 @@ namespace AotJS {
     string dump() const;
   };
 
+  class Local {
+    Val mVal;
+
+  public:
+    Local()
+    : mVal(Undefined())
+    {
+      // primitive
+    }
+
+    Local(double aVal)
+    : mVal(aVal)
+    {
+      // primitive
+    }
+
+    Local(int32_t aVal)
+    : mVal(aVal)
+    {
+      // primitive
+    }
+
+    Local(bool aVal)
+    : mVal(aVal)
+    {
+      // primitive
+    }
+
+    Local(Null aVal)
+    : mVal(aVal)
+    {
+      // primitive
+    }
+
+    Local(Undefined aVal)
+    : mVal(aVal)
+    {
+      // primitive
+    }
+
+    Local(GCThing *aVal)
+    : mVal(aVal)
+    {
+      aVal->retain();
+    }
+
+    Local(Val aVal)
+    : mVal(aVal)
+    {
+      if (aVal.isJSThing()) {
+        aVal.asJSThing().retain();
+      }
+    }
+
+    ~Local() {
+      if (mVal.isJSThing()) {
+        mVal.asJSThing().release();
+      }
+    }
+
+    JSThing& asJSThing() const {
+      return mVal.asJSThing();
+    }
+
+    String& asString() const {
+      return mVal.asString();
+    }
+
+    Symbol& asSymbol() const {
+      return mVal.asSymbol();
+    }
+
+    Object& asObject() const {
+      return mVal.asObject();
+    }
+
+    Function& asFunction() const {
+      return mVal.asFunction();
+    }
+
+    bool operator==(const Local &rhs) const {
+      return mVal == rhs.mVal;
+    }
+
+    operator Val() const {
+      return mVal;
+    }
+
+    string dump() const {
+      return mVal.dump();
+    }
+  };
+
 }
 
 namespace std {
@@ -468,7 +594,6 @@ namespace AotJS {
     FunctionBody mBody;
     std::string mName;
     size_t mArity;
-    size_t mLocalsCount;
     std::vector<Val *> mCaptures;
 
   public:
@@ -476,13 +601,11 @@ namespace AotJS {
     Function(Engine& aEngine,
       FunctionBody aBody,
       std::string aName,
-      size_t aArity,
-      size_t aLocalsCount)
+      size_t aArity)
     : Object(aEngine), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
-      mLocalsCount(aLocalsCount),
       mScope(nullptr),
       mCaptures()
     {
@@ -494,14 +617,12 @@ namespace AotJS {
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      size_t aLocalsCount,
       Scope& aScope,
       std::vector<Val *> aCaptures)
     : Object(aEngine), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
-      mLocalsCount(aLocalsCount),
       mScope(&aScope),
       mCaptures(aCaptures)
     {
@@ -521,10 +642,6 @@ namespace AotJS {
     ///
     size_t arity() const {
       return mArity;
-    }
-
-    size_t localsCount() const {
-      return mLocalsCount;
     }
 
     ///
@@ -561,8 +678,7 @@ namespace AotJS {
     Function *mFunc;
     Val mThis;
     size_t mArity;
-    size_t mLocalsOffset;
-    std::vector<Val> mLocals;
+    std::vector<Val> mArgs;
 
   public:
     Frame(Engine& aEngine,
@@ -575,19 +691,13 @@ namespace AotJS {
       mFunc(&aFunc),
       mThis(aThis),
       mArity(aArgs.size()),
-      // Store args at the beginning of the locals vector.
-      mLocals(aArgs)
+      mArgs(aArgs)
     {
       // Guarantee the expected arg count is always there,
       // reserving space and initializing them.
       // todo: implement es6 default parameters
-      while (mLocals.size() < mFunc->arity()) {
-        mLocals.push_back(Undefined());
-      }
-      // Save space for locals after this.
-      mLocalsOffset = mLocals.size();
-      while (mLocals.size() - mLocalsOffset < mFunc->localsCount()) {
-        mLocals.push_back(Undefined());
+      while (mArgs.size() < mFunc->arity()) {
+        mArgs.push_back(Undefined());
       }
     }
 
@@ -610,7 +720,7 @@ namespace AotJS {
     ///
     Val& arg(size_t index) {
       // Args are always at the start of the locals array.
-      return mLocals[index];
+      return mArgs[index];
     }
 
     ///
@@ -618,13 +728,6 @@ namespace AotJS {
     ///
     size_t arity() {
       return mArity;
-    }
-
-    ///
-    /// Return address of a local.
-    ///
-    Val& local(size_t index) {
-      return mLocals[mLocalsOffset + index];
     }
 
     void markRefsForGC() override;

@@ -8,7 +8,7 @@ int main() {
   AotJS::Engine engine;
 
   // Register the function!
-  auto work = new Function(
+  Local work = new Function(
     engine,
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
@@ -17,18 +17,19 @@ int main() {
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
       //
-      // We allocate them on the stack frame if they're not captured, but
-      // note we allocate a lexical scope first for those which are captured
+      // We allocate them as native local vars if they're not captured, with
+      // a `Local` wrapper to ensure they stay alive in case of GC.
+      //
+      // Note we allocate a lexical scope first for those which are captured
       // by the closure function. That scope will live on separately after
       // the current function ends.
+      //
       Scope* const _scope1 = new Scope(aEngine, aFunc.scope(), 1);
-      Val& _scopeval = aFrame.local(0);
-      _scopeval = _scope1; // meh make this prettier
+      Local _scopeval = _scope1; // meh make this prettier
       Val& b = _scope1->local(0);
 
-      Val& a = aFrame.local(1);
-      Val& func = aFrame.local(2);
-      Val& anon_retval = aFrame.local(3);
+      Local a;
+      Local func;
 
       // function declarations happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
@@ -50,7 +51,6 @@ int main() {
         },
         "func",    // name
         0,         // arg arity
-        0,         // locals
         *_scope1,  // lexical scope
         {&b}       // captures
       );
@@ -62,7 +62,7 @@ int main() {
       std::cout << "should say 'b': " << b.dump() << "\n";
 
       // Make the call!
-      anon_retval = aEngine.call(func, Null(), {});
+      aEngine.call(func, Null(), {});
 
       // should say "b plus one"
       std::cout << "should say 'b plus one': " << b.dump() << "\n";
@@ -70,8 +70,7 @@ int main() {
       return Undefined();
     },
     "work",
-    1,        // argument count
-    5         // locals count
+    1        // argument count
     // no closures
   );
 

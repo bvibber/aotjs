@@ -129,6 +129,19 @@ Ok there's several classes of variable bindings in JS:
     * have the _Capture_ carry pointers, which can reach arbitrarily high
     * the Capture references the current scope. Or a list of all scopes it uses?
 
+Ok all that seems to work for the stack frames and captures, but it feels ugly.
+What if we rely on the native stack & constructors/destructors to do reference
+counting as a stack keepalive? Then anything that's not kept alive gets GC'd if
+it wasn't found in the object graph...
+
+* Val class implements non-counting behavior, for use in array & prop storage
+  * you would get uncollectable cycles if used ref counting on those
+* Local class wraps it with ref-counting behavior for GCThings, stack use:
+  * non-captured local variables in the function body
+  * argument list in the Frame
+  * captured local variables in the Scope
+  * only locals can be captured in closures
+
 ```js
 
 var a = "a";

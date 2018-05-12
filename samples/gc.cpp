@@ -8,20 +8,22 @@ int main() {
   Engine engine;
 
   // Register the function!
-  Val func = new Function(
+  Local func = new Function(
     engine,
     [] (Engine& engine, Function& func, Frame& frame) -> Val {
       // Fetch the argument list. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
-      Val& root = frame.arg(0);
+      Local root = frame.arg(0);
 
-      Val& obj = frame.local(0);
-      Val& objname = frame.local(1);
-      Val& propname = frame.local(2);
-      Val& propval = frame.local(3);
-      Val& unused = frame.local(4);
-      Val& notpropname = frame.local(5);
+      // Local variable definitions are hoisted to the top.
+      // They are all initialized to Undefined().
+      Local obj;
+      Local objname;
+      Local propname;
+      Local propval;
+      Local unused;
+      Local notpropname;
 
       // Now our function body actually starts!
       obj = new Object(engine);
@@ -43,12 +45,11 @@ int main() {
       return Undefined();
     },
     "work",
-    1, // argument count
-    5  // number of locals
+    1 // argument count
     // no scope capture
   );
 
-  auto retval = engine.call(func, Null(), {engine.root()});
+  Local retval = engine.call(func, Null(), {engine.root()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();
