@@ -235,6 +235,12 @@ namespace AotJS {
     Val(String& aVal)    : Val(&aVal) {}
     Val(Symbol& aVal)    : Val(&aVal) {}
     Val(Object& aVal)    : Val(&aVal) {}
+    // fixme how do we genericize these subclasses?
+    // it keeps sending me to the bool variant if I don't declare every variation.
+    // and can't use static_cast because it thinks they're not inheritence-related yet.
+    Val(Function* aVal)  : Val(reinterpret_cast<Object *>(aVal)) {}
+    Val(Function& aVal)  : Val(&aVal) {}
+
 
     Val &operator=(const Val &aVal) {
       mRaw = aVal.mRaw;
@@ -398,11 +404,34 @@ namespace AotJS {
       // primitive
     }
 
-    Local(GCThing *aVal)
+    Local(String *aVal)
     : mVal(aVal)
     {
-      aVal->retain();
+      reinterpret_cast<GCThing*>(aVal)->retain();
     }
+
+    Local(Symbol *aVal)
+    : mVal(aVal)
+    {
+      reinterpret_cast<GCThing*>(aVal)->retain();
+    }
+
+    Local(Object *aVal)
+    : mVal(aVal)
+    {
+      reinterpret_cast<GCThing*>(aVal)->retain();
+    }
+
+    Local(Function *aVal)
+    : mVal(aVal)
+    {
+      reinterpret_cast<GCThing*>(aVal)->retain();
+    }
+
+    Local(String& aVal) : mVal(&aVal) {}
+    Local(Symbol& aVal) : mVal(&aVal) {}
+    Local(Object& aVal) : mVal(&aVal) {}
+    Local(Function& aVal) : mVal(&aVal) {}
 
     Local(Val aVal)
     : mVal(aVal)
