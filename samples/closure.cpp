@@ -27,12 +27,12 @@ int main() {
       Scope* const _scope1 = new Scope(aEngine, aFunc.scope(), 1);
       //Local _scopeval = _scope1; // meh make this prettier
       // FIXME
-      Val& b = _scope1->local(0);
 
       Local a;
+      Val& b = _scope1->local(0);
       Local func;
 
-      // function declarations happen at the top of the scope too.
+      // function declarations/definitions happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
       // its actual value can change.
       func = new Function(aEngine,
