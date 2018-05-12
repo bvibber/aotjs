@@ -8,20 +8,14 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
   // Fetch the argument list. The function arity must be correct!
   // Attempting to read beyond the actual number will be invalid.
   // Can skip this call if no references to args.
-  auto args = frame->args();
-  auto root = &args[0];
+  auto root = frame->arg(0);
 
-  // Open a scope with local variables.
-  // Can skip this call if no locals are used?
-  auto scope = engine->pushScope(6);
-
-  auto locals = scope->locals();
-  auto obj = &locals[0];
-  auto objname = &locals[1];
-  auto propname = &locals[2];
-  auto propval = &locals[3];
-  auto unused = &locals[4];
-  auto notpropname = &locals[5];
+  auto obj = frame->local(0);
+  auto objname = frame->local(1);
+  auto propname = frame->local(2);
+  auto propval = frame->local(3);
+  auto unused = frame->local(4);
+  auto notpropname = frame->local(5);
 
   *obj = engine->newObject(nullptr);
   *objname = engine->newString("an_obj");
@@ -39,10 +33,6 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
 
   root->asObject()->setProp(*objname, *obj);
 
-  // We could do this with a destructor too, but if we generate LLVM
-  // bitcode directly we'll have to do that manually anyway.
-  engine->popScope();
-
   return Undefined();
 }
 
@@ -53,7 +43,8 @@ int main() {
   auto func = engine.newFunction(
     work_body,
     "work",
-    1
+    1, // argument count
+    5 // number of locals
   );
 
   auto retval = engine.call(func, Null(), {engine.root()});

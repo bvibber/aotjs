@@ -253,7 +253,7 @@ namespace AotJS {
       mThis.asJSThing()->markRefsForGC();
     }
 
-    for (auto val : mArgs) {
+    for (auto val : mLocals) {
       if (val.isJSThing()) {
         val.asJSThing()->markRefsForGC();
       }
@@ -319,9 +319,11 @@ namespace AotJS {
     FunctionBody aBody,
     std::string aName,
     size_t aArity,
+    size_t aLocalsCount,
+    Scope* aScope,
     std::vector<Val *>aCaptures)
   {
-    auto func = new Function(mScope, aBody, aName, aArity, aCaptures);
+    auto func = new Function(aBody, aName, aArity, aLocalsCount, aScope, aCaptures);
     registerForGC(func);
     return func;
   }
@@ -329,37 +331,16 @@ namespace AotJS {
   Function *Engine::newFunction(
     FunctionBody aBody,
     std::string aName,
-    size_t aArity)
+    size_t aArity,
+    size_t aLocalsCount)
   {
-    return newFunction(aBody, aName, aArity, {});
+    return newFunction(aBody, aName, aArity, aLocalsCount, nullptr, {});
   }
 
-  Function *Engine::newFunction(
-    FunctionBody aBody,
-    std::string aName)
-  {
-    return newFunction(aBody, aName, 0);
-  }
-
-  Scope *Engine::newScope(size_t aLocalCount) {
-    auto scope = new Scope(mScope, aLocalCount);
+  Scope *Engine::newScope(Scope *aParent, size_t aCount) {
+    auto scope = new Scope(aParent, aCount);
     registerForGC(scope);
     return scope;
-  }
-
-  Scope *Engine::pushScope(size_t aLocalCount) {
-    auto scope = newScope(aLocalCount);
-    mScope = scope;
-    return scope;
-  }
-
-  void Engine::popScope() {
-    if (mScope) {
-      mScope = mScope->parent();
-    } else {
-      // this should not happen
-      std::abort();
-    }
   }
 
   Frame *Engine::newFrame(

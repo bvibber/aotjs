@@ -108,6 +108,51 @@ The marking phase starts with all our roots (global object and the stack)
 TODO: stack!
 
 
+## Closures
+
+Oh man this is more complex than I thought if don't want to leak memory.
+
+Ok there's several classes of variable bindings in JS:
+
+* uncaptured local args/vars
+  * allocate in the frame, kept alive by stack push/pop
+* names captured from an outside scope
+  * get a pointer to the actual value from the scope
+* names that are captured by any lower scope
+  * allocate in a scope, which is kept alive by the function definition
+  * referencing higher scopes?
+    * copy the used pointers into the local array
+    * scope chain to retain GC
+  * what about... capturing an argument that's modified?
+    * could rewrite that into copying the arg into the capture state.
+    * have the _Scope_ carry vals
+    * have the _Capture_ carry pointers, which can reach arbitrarily high
+    * the Capture references the current scope. Or a list of all scopes it uses?
+
+```js
+
+var a = "a";
+
+function foo() {
+  // we actually capture a from global
+  // so we can pass it in to bar's creation
+
+  var b = "b";
+
+  function bar() {
+    // a is captured from global
+    // b is captured from foo
+    a += b;
+  }
+
+  bar();
+}
+foo();
+console.log(a); // "ab"
+
+```
+
+
 # Naive implementation
 
 Let's assume the runtime is implemented in C++. Naive implementation for totally

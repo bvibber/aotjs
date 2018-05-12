@@ -375,7 +375,7 @@ namespace AotJS {
   };
 
   ///
-  /// Represents a JS scope.
+  /// Represents a JS lexical capture scope.
   /// Contains local variables, and references the outer scopes.
   ///
   class Scope : public GCThing {
@@ -385,16 +385,16 @@ namespace AotJS {
   public:
     ~Scope() override;
 
-    Scope(Scope *aParent, size_t aLocalCount)
+    Scope(Scope *aParent, size_t aCount)
     :
       mParent(aParent),
-      mLocals(std::vector<Val>(aLocalCount, Undefined()))
+      mLocals(aCount, Undefined())
     {
       //
     }
 
-    Val *locals() {
-      return mLocals.data();
+    Val *local(size_t aIndex) {
+      return &mLocals[aIndex];
     }
 
     Scope *parent() const {
@@ -414,20 +414,23 @@ namespace AotJS {
     FunctionBody mBody;
     std::string mName;
     size_t mArity;
+    size_t mLocalsCount;
     std::vector<Val *> mCaptures;
 
   public:
-    Function(Scope *aScope,
-      FunctionBody aBody,
+    Function(FunctionBody aBody,
       std::string aName,
       size_t aArity,
+      size_t aLocalsCount,
+      Scope *aScope,
       std::vector<Val *> aCaptures)
     :
       Object(nullptr), // todo: have a function prototype object!
-      mScope(aScope),
       mBody(aBody),
       mName(aName),
       mArity(aArity),
+      mLocalsCount(aLocalsCount),
+      mScope(aScope),
       mCaptures(aCaptures)
     {
       //
@@ -448,12 +451,29 @@ namespace AotJS {
       return mArity;
     }
 
+    size_t localsCount() const {
+      return mLocalsCount;
+    }
+
+    ///
+    /// The actual function pointer.
+    ///
     FunctionBody body() const {
       return mBody;
     }
 
-    Val **captures() {
-      return mCaptures.data();
+    ///
+    /// The lexical capture scope.
+    ///
+    Scope *scope() const {
+      return mScope;
+    }
+
+    ///
+    /// Return one of the captured variable pointers.
+    ///
+    Val *capture(size_t aIndex) {
+      return mCaptures[aIndex];
     }
 
     void markRefsForGC() override;
@@ -469,7 +489,8 @@ namespace AotJS {
     Function *mFunc;
     Val mThis;
     size_t mArity;
-    std::vector<Val> mArgs;
+    size_t mLocalsOffset;
+    std::vector<Val> mLocals;
 
   public:
     Frame(Frame *aParent,
@@ -481,13 +502,19 @@ namespace AotJS {
       mFunc(aFunc),
       mThis(aThis),
       mArity(aArgs.size()),
-      mArgs(aArgs)
+      // Store args at the beginning of the locals vector.
+      mLocals(aArgs)
     {
       // Guarantee the expected arg count is always there,
       // reserving space and initializing them.
       // todo: implement es6 default parameters
-      while (mArgs.size() < mFunc->arity()) {
-        mArgs.push_back(Undefined());
+      while (mLocals.size() < mFunc->arity()) {
+        mLocals.push_back(Undefined());
+      }
+      // Save space for locals after this.
+      mLocalsOffset = mLocals.size();
+      while (mLocals.size() - mLocalsOffset < mFunc->localsCount()) {
+        mLocals.push_back(Undefined());
       }
     }
 
@@ -508,8 +535,9 @@ namespace AotJS {
     /// from the function's arity, even if the actual argument arity
     /// is lower.
     ///
-    Val *args() {
-      return mArgs.data();
+    Val *arg(size_t index) {
+      // Args are always at the start of the locals array.
+      return &mLocals[index];
     }
 
     ///
@@ -517,6 +545,13 @@ namespace AotJS {
     ///
     size_t arity() {
       return mArity;
+    }
+
+    ///
+    /// Return address of a local.
+    ///
+    Val *local(size_t index) {
+      return &mLocals[mLocalsOffset + index];
     }
 
     void markRefsForGC() override;
@@ -540,8 +575,6 @@ namespace AotJS {
     unordered_set<GCThing *> mObjects;
     void registerForGC(GCThing *aObj);
 
-    Scope *newScope(size_t aLocalCount);
-
     Frame *newFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
     Frame *pushFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
     void popFrame();
@@ -560,6 +593,7 @@ namespace AotJS {
       return mRoot;
     }
 
+    // todo change this to dep-injection on the other constructors
     Object *newObject(Object *prototype);
 
     String *newString(const string &aStr);
@@ -570,17 +604,16 @@ namespace AotJS {
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
+      size_t aLocalsCount,
+      Scope* aScope,
       std::vector<Val *> aCaptures);
     Function *newFunction(
       FunctionBody aBody,
       std::string aName,
-      size_t aArity);
-    Function *newFunction(
-      FunctionBody aBody,
-      std::string aName);
+      size_t aArity,
+      size_t aLocalsCount);
 
-    Scope *pushScope(size_t aLocalCount);
-    void popScope();
+    Scope *newScope(Scope *aParent, size_t aCount);
 
     Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
 

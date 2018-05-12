@@ -8,25 +8,21 @@ Val work_body(Engine *engine, Function *func, Frame *frame);
 Val func_body(Engine *engine, Function *func, Frame *frame);
 
 Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
-  // Get our captures, if any.
-  auto captures = aFunc->captures();
-
-  // Get our arguments, if any.
-  auto args = aFrame->args();
-
   // Variable hoisting!
   // Conceptually we allocate all the locals at the start of the scope.
   // They'll all be filled with the JS `undefined` value initially.
-  auto scope = aEngine->pushScope(4);
-  auto locals = scope->locals();
+  //
+  // We allocate them on the stack frame if they're not captured, but
+  // note we allocate a lexical scope first for those which are captured
+  // by the closure function. That scope will live on separately after
+  // the current function ends.
+  Scope* const _scope1 = aEngine->newScope(aFunc->scope(), 1);
+  *(aFrame->local(0)) = _scope1;
+  Val* const b = _scope1->local(0);
 
-  // Pull the locals in as pointers into the scope's locals array.
-  // They can be modified by later captures as long as they still
-  // reference this scope.
-  auto a = &locals[0];
-  auto b = &locals[1];
-  auto func = &locals[2];
-  auto anon_retval = &locals[3];
+  Val* const a = aFrame->local(1);
+  Val* const func = aFrame->local(2);
+  Val* const anon_retval = aFrame->local(3);
 
   // function declarations happen at the top of the scope too.
   // This is where we capture the `b` variable's location, knowing
@@ -34,7 +30,9 @@ Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
   *func = aEngine->newFunction(
     func_body, // implementation
     "func",    // name
-    0,         // arity
+    0,         // arg arity
+    0,         // locals
+    _scope1,   // lexical scope
     {b}        // captures
   );
 
@@ -45,20 +43,18 @@ Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
   std::cout << "should say 'b': " << b->dump() << "\n";
 
   // Make the call!
-  auto retval = aEngine->call(*func, Null(), {});
+  *anon_retval = aEngine->call(*func, Null(), {});
 
   // should say "b plus one"
   std::cout << "should say 'b plus one': " << b->dump() << "\n";
 
-  aEngine->popScope();
   return Undefined();
 }
 
 // The closure function...
 Val func_body(Engine *engine, Function *func, Frame *frame) {
   // Unlike the locals and args arrays, captures gives you a ptr to a ptr
-  auto captures = func->captures();
-  auto b = captures[0];
+  Val* const b = func->capture(0);
 
   // replace the variable in the parent scope
   *b = engine->newString("b plus one");
@@ -73,7 +69,8 @@ int main() {
   auto work = engine.newFunction(
     work_body,
     "work",
-    1       // argument count
+    1,       // argument count
+    5        // locals count
   );
 
   engine.call(work, Null(), {});
