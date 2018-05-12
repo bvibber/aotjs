@@ -10,14 +10,15 @@ int main() {
   // Register the function!
   Local func = new Function(
     engine,
-    [] (Engine& engine, Function& func, Frame& frame) -> Val {
-      // Fetch the argument list. The function arity must be correct!
+    [] (Engine& engine, Function& func, Frame& frame) -> Local {
+      // Fetch the argument refs. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
-      Local root = frame.arg(0);
+      Val& root = frame.arg(0);
 
       // Local variable definitions are hoisted to the top.
       // They are all initialized to Undefined().
+      // These are a
       Local obj;
       Local objname;
       Local propname;
@@ -49,7 +50,7 @@ int main() {
     // no scope capture
   );
 
-  Local retval = engine.call(func, Null(), {engine.root()});
+  engine.call(func, Null(), {engine.root()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();

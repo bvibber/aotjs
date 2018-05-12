@@ -1,5 +1,9 @@
 #include "aotjs_runtime.h"
 
+#ifdef DEBUG
+#include <iostream>
+#endif
+
 #include <sstream>
 
 namespace AotJS {
@@ -103,7 +107,7 @@ namespace AotJS {
     return typeof_object;
   }
 
-  static Val normalizePropName(Val aName) {
+  static Local normalizePropName(Local aName) {
     if (aName.isString()) {
       return aName;
     } else if (aName.isSymbol()) {
@@ -111,6 +115,9 @@ namespace AotJS {
     } else {
       // todo: convert to string
       // hrm, we need a ref to an engine for that?
+      #ifdef DEBUG
+      std::cerr << "cannot use non-string/symbol as property index";
+      #endif
       std::abort();
       return Undefined();
     }
@@ -118,8 +125,8 @@ namespace AotJS {
 
   // todo: handle numeric indices
   // todo: getters
-  Val Object::getProp(Val aName) {
-    auto name = normalizePropName(aName);
+  Local Object::getProp(Local aName) {
+    Local name = normalizePropName(aName);
     auto index = mProps.find(name);
     if (index == mProps.end()) {
       if (mPrototype) {
@@ -132,7 +139,7 @@ namespace AotJS {
     }
   }
 
-  void Object::setProp(Val aName, Val aVal) {
+  void Object::setProp(Local aName, Local aVal) {
     auto name = normalizePropName(aName);
     mProps.emplace(name, aVal);
   }
@@ -316,15 +323,18 @@ namespace AotJS {
     }
   }
 
-  Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
+  Local Engine::call(Local aFunc, Local aThis, std::vector<Val> aArgs) {
     if (aFunc.isFunction()) {
       auto func = aFunc.asFunction();
       auto frame = pushFrame(func, aThis, aArgs);
-      auto retval = func.body()(*this, func, frame);
+      Local retval = func.body()(*this, func, frame);
       popFrame();
       return retval;
     } else {
       // todo do something
+      #ifdef DEBUG
+      std::cerr << "cannot call a non-function\n";
+      #endif
       std::abort();
     }
   }
@@ -343,8 +353,15 @@ namespace AotJS {
 
     // Check for anything held open by stack frames in a Local.
     for (auto obj : mObjects) {
-      if (obj->isReferenced()) {
+      if (obj->refCount()) {
         obj->markForGC();
+        #ifdef DEBUG
+        std::cerr << "refed " << obj->refCount() << ": " + obj->dump() + "\n";
+        #endif
+      } else {
+        #ifdef DEBUG
+        std::cerr << "unrefed: " + obj->dump() + "\n";
+        #endif
       }
     }
 

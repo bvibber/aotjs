@@ -12,7 +12,7 @@ int main() {
     engine,
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Engine& aEngine, Function& aFunc, Frame& aFrame) -> Val {
+    [] (Engine& aEngine, Function& aFunc, Frame& aFrame) -> Local {
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
@@ -25,7 +25,8 @@ int main() {
       // the current function ends.
       //
       Scope* const _scope1 = new Scope(aEngine, aFunc.scope(), 1);
-      Local _scopeval = _scope1; // meh make this prettier
+      //Local _scopeval = _scope1; // meh make this prettier
+      // FIXME
       Val& b = _scope1->local(0);
 
       Local a;
@@ -36,7 +37,7 @@ int main() {
       // its actual value can change.
       func = new Function(aEngine,
         // implementation
-        [] (Engine& engine, Function& func, Frame& frame) -> Val {
+        [] (Engine& engine, Function& func, Frame& frame) -> Local {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //

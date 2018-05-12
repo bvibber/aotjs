@@ -1,3 +1,10 @@
+#ifndef AOTJS_RUNTIME
+#define AOTJS_RUNTIME
+
+#ifdef DEBUG
+#include <iostream>
+#endif
+
 #include <cinttypes>
 #include <string>
 #include <vector>
@@ -22,6 +29,7 @@ namespace AotJS {
   extern Typeof typeof_object;
 
   class Val;
+  class Local;
 
   class GCThing;
   class Scope;
@@ -45,7 +53,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Val (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
+  typedef Local (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -81,7 +89,7 @@ namespace AotJS {
       return *mRoot;
     }
 
-    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
+    Local call(Local aFunc, Local aThis, std::vector<Val> aArgs);
 
     void gc();
     string dump();
@@ -125,17 +133,28 @@ namespace AotJS {
 
     // To be called only by Local...
     void retain() {
+      #ifdef DEBUG
+      std::cout << "retain(" << mRefCount << "++) " << this << " " << dump() << "\n";
+      #endif
       mRefCount++;
     }
 
     void release() {
-      mRefCount--;
+      #ifdef DEBUG
+      std::cout << "release(" << mRefCount << "--) " << this << " " << dump() << "\n";
+      #endif
+      if (mRefCount) {
+        mRefCount--;
+      } else {
+        // should not happen
+        std::abort();
+      }
     }
 
     // To be called only by Engine...
 
-    bool isReferenced() const {
-      return mRefCount > 0;
+    size_t refCount() const {
+      return mRefCount;
     }
 
     bool isMarkedForGC() const {
@@ -364,6 +383,11 @@ namespace AotJS {
     string dump() const;
   };
 
+  ///
+  /// Represents a JavaScript variable (Val) wrapped in a reference count.
+  /// Using this for local variables keeps them alive in case of GC, since
+  /// there's no way to walk the WebAssembly stack to find them.
+  ///
   class Local {
     Val mVal;
 
@@ -404,9 +428,14 @@ namespace AotJS {
       // primitive
     }
 
-    Local(String *aVal)
+    Local(GCThing *aVal)
     : mVal(aVal)
     {
+      aVal->retain();
+    }
+
+    Local(String *aVal)
+    : mVal(aVal) {
       reinterpret_cast<GCThing*>(aVal)->retain();
     }
 
@@ -428,23 +457,81 @@ namespace AotJS {
       reinterpret_cast<GCThing*>(aVal)->retain();
     }
 
-    Local(String& aVal) : mVal(&aVal) {}
-    Local(Symbol& aVal) : mVal(&aVal) {}
-    Local(Object& aVal) : mVal(&aVal) {}
-    Local(Function& aVal) : mVal(&aVal) {}
+    Local(String& aVal) : Local(&aVal) {}
+    Local(Symbol& aVal) : Local(&aVal) {}
+    Local(Object& aVal) : Local(&aVal) {}
+    Local(Function& aVal) : Local(&aVal) {}
 
     Local(Val aVal)
     : mVal(aVal)
     {
-      if (aVal.isJSThing()) {
-        aVal.asJSThing().retain();
+      if (mVal.isJSThing()) {
+        mVal.asJSThing().retain();
       }
     }
+
+    // copy constructor
+    Local(const Local &aLocal)
+    : mVal(aLocal.mVal)
+    {
+      if (mVal.isJSThing()) {
+        mVal.asJSThing().retain();
+      }
+    }
+
+    // assignment operator also needed
+    // or else everything goes to hell
+    //
+    // todo make these for primitive types too
+    Local &operator=(const Local &aLocal) {
+      if (isJSThing()) {
+        mVal.asJSThing().release();
+      }
+      mVal = aLocal.mVal;
+      if (isJSThing()) {
+        mVal.asJSThing().retain();
+      }
+      return *this;
+    }
+
+    // todo implement move semantics?
 
     ~Local() {
       if (mVal.isJSThing()) {
         mVal.asJSThing().release();
       }
+    }
+
+    bool isDouble() const {
+      return mVal.isDouble();
+    }
+
+    bool isInt32() const {
+      return mVal.isInt32();
+    }
+
+    bool isBool() const {
+      return mVal.isBool();
+    }
+
+    bool isJSThing() const {
+      return mVal.isJSThing();
+    }
+
+    bool isString() const {
+      return mVal.isString();
+    }
+
+    bool isSymbol() const {
+      return mVal.isSymbol();
+    }
+
+    bool isObject() const {
+      return mVal.isObject();
+    }
+
+    bool isFunction() const {
+      return mVal.isFunction();
     }
 
     JSThing& asJSThing() const {
@@ -579,8 +666,8 @@ namespace AotJS {
     string dump() override;
     Typeof typeof() const override;
 
-    Val getProp(Val name);
-    void setProp(Val name, Val val);
+    Local getProp(Local name);
+    void setProp(Local name, Local val);
   };
 
   ///
@@ -764,3 +851,5 @@ namespace AotJS {
   };
 
 }
+
+#endif
