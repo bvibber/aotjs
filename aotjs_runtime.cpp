@@ -297,68 +297,12 @@ namespace AotJS {
     mObjects.insert(obj);
   }
 
-  Object *Engine::newObject(Object *prototype) {
-    auto obj = new Object(prototype);
-    registerForGC(obj);
-    return obj;
-  }
-
-  String *Engine::newString(const string &aStr) {
-    auto str = new String(aStr);
-    registerForGC(str);
-    return str;
-  }
-
-  Symbol *Engine::newSymbol(const string &aName) {
-    auto sym = new Symbol(aName);
-    registerForGC(sym);
-    return sym;
-  }
-
-  Function *Engine::newFunction(
-    FunctionBody aBody,
-    std::string aName,
-    size_t aArity,
-    size_t aLocalsCount,
-    Scope* aScope,
-    std::vector<Val *>aCaptures)
-  {
-    auto func = new Function(aBody, aName, aArity, aLocalsCount, aScope, aCaptures);
-    registerForGC(func);
-    return func;
-  }
-
-  Function *Engine::newFunction(
-    FunctionBody aBody,
-    std::string aName,
-    size_t aArity,
-    size_t aLocalsCount)
-  {
-    return newFunction(aBody, aName, aArity, aLocalsCount, nullptr, {});
-  }
-
-  Scope *Engine::newScope(Scope *aParent, size_t aCount) {
-    auto scope = new Scope(aParent, aCount);
-    registerForGC(scope);
-    return scope;
-  }
-
-  Frame *Engine::newFrame(
-    Function *aFunc,
-    Val aThis,
-    std::vector<Val> aArgs)
-  {
-    auto frame = new Frame(mFrame, aFunc, aThis, aArgs);
-    registerForGC(frame);
-    return frame;
-  }
-
   Frame *Engine::pushFrame(
     Function *aFunc,
     Val aThis,
     std::vector<Val> aArgs)
   {
-    auto frame = newFrame(aFunc, aThis, aArgs);
+    auto frame = new Frame(this, mFrame, aFunc, aThis, aArgs);
     mFrame = frame;
     return frame;
   }

@@ -48,6 +48,52 @@ namespace AotJS {
   typedef Val (*FunctionBody)(Engine *engine, Function *func, Frame *frame);
 
   ///
+  /// Represents an entire JS world.
+  ///
+  /// Garbage collection is run when gc() is called manually,
+  /// or just let everything deallocate when the engine is
+  /// destroyed.
+  ///
+  class Engine {
+    Object *mRoot;
+    Scope *mScope;
+    Frame *mFrame;
+
+    // Set of all live objects.
+    // Todo: replace this with an allocator we know how to walk!
+    unordered_set<GCThing *> mObjects;
+    void registerForGC(GCThing *aObj);
+    friend class GCThing;
+
+    Frame *newFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
+    Frame *pushFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
+    void popFrame();
+
+  public:
+    Engine()
+    :
+      mRoot(nullptr),
+      mScope(nullptr),
+      mFrame(nullptr)
+    {
+      //
+    }
+
+    void setRoot(Object* aRoot) {
+      mRoot = aRoot;
+    }
+
+    Object *root() const {
+      return mRoot;
+    }
+
+    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
+
+    void gc();
+    string dump();
+  };
+
+  ///
   /// Base class for an item that can be garbage-collected and may
   /// reference other GC-able items.
   ///
@@ -57,11 +103,11 @@ namespace AotJS {
     bool mMarked;
 
   public:
-    GCThing()
+    GCThing(Engine* aEngine)
     :
       mMarked(false)
     {
-      //
+      aEngine->registerForGC(this);
     }
 
     virtual ~GCThing();
@@ -91,7 +137,8 @@ namespace AotJS {
   ///
   class JSThing : public GCThing {
   public:
-    JSThing()
+    JSThing(Engine *aEngine)
+    : GCThing(aEngine)
     {
       //
     }
@@ -292,7 +339,8 @@ namespace AotJS {
 
   class PropIndex : public JSThing {
   public:
-    PropIndex() {}
+    PropIndex(Engine* aEngine)
+    : JSThing(aEngine) {}
 
     ~PropIndex() override;
   };
@@ -301,8 +349,8 @@ namespace AotJS {
     string data;
 
   public:
-    String(string const &aStr)
-    :
+    String(Engine* aEngine, string const &aStr)
+    : PropIndex(aEngine),
       data(aStr)
     {
       //
@@ -327,7 +375,8 @@ namespace AotJS {
     string name;
 
   public:
-    Symbol(string const &aName) :
+    Symbol(Engine* aEngine, string const &aName)
+    : PropIndex(aEngine),
       name(aName)
     {
       //
@@ -356,8 +405,8 @@ namespace AotJS {
     unordered_map<Val,Val> mProps;
 
   public:
-    Object(Object *aPrototype)
-    :
+    Object(Engine *aEngine, Object *aPrototype)
+    : JSThing(aEngine),
       mPrototype(aPrototype)
     {
       // Note this doesn't call the constructor,
@@ -383,15 +432,15 @@ namespace AotJS {
     std::vector<Val> mLocals;
 
   public:
-    ~Scope() override;
-
-    Scope(Scope *aParent, size_t aCount)
-    :
+    Scope(Engine *aEngine, Scope *aParent, size_t aCount)
+    : GCThing(aEngine),
       mParent(aParent),
       mLocals(aCount, Undefined())
     {
       //
     }
+
+    ~Scope() override;
 
     Val *local(size_t aIndex) {
       return &mLocals[aIndex];
@@ -418,14 +467,14 @@ namespace AotJS {
     std::vector<Val *> mCaptures;
 
   public:
-    Function(FunctionBody aBody,
+    Function(Engine *aEngine,
+      FunctionBody aBody,
       std::string aName,
       size_t aArity,
       size_t aLocalsCount,
       Scope *aScope,
       std::vector<Val *> aCaptures)
-    :
-      Object(nullptr), // todo: have a function prototype object!
+    : Object(aEngine, nullptr), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
@@ -493,11 +542,12 @@ namespace AotJS {
     std::vector<Val> mLocals;
 
   public:
-    Frame(Frame *aParent,
+    Frame(Engine *aEngine,
+      Frame *aParent,
       Function *aFunc,
       Val aThis,
       std::vector<Val> aArgs)
-    :
+    : GCThing(aEngine),
       mParent(aParent),
       mFunc(aFunc),
       mThis(aThis),
@@ -556,69 +606,6 @@ namespace AotJS {
 
     void markRefsForGC() override;
     string dump() override;
-  };
-
-  ///
-  /// Represents an entire JS world.
-  ///
-  /// Garbage collection is run when gc() is called manually,
-  /// or just let everything deallocate when the engine is
-  /// destroyed.
-  ///
-  class Engine {
-    Object *mRoot;
-    Scope *mScope;
-    Frame *mFrame;
-
-    // Set of all live objects.
-    // Todo: replace this with an allocator we know how to walk!
-    unordered_set<GCThing *> mObjects;
-    void registerForGC(GCThing *aObj);
-
-    Frame *newFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
-    Frame *pushFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
-    void popFrame();
-
-  public:
-    Engine()
-    :
-      mRoot(nullptr),
-      mScope(nullptr),
-      mFrame(nullptr)
-    {
-      mRoot = newObject(nullptr);
-    }
-
-    Object *root() const {
-      return mRoot;
-    }
-
-    // todo change this to dep-injection on the other constructors
-    Object *newObject(Object *prototype);
-
-    String *newString(const string &aStr);
-
-    Symbol *newSymbol(const string &aName);
-
-    Function *newFunction(
-      FunctionBody aBody,
-      std::string aName,
-      size_t aArity,
-      size_t aLocalsCount,
-      Scope* aScope,
-      std::vector<Val *> aCaptures);
-    Function *newFunction(
-      FunctionBody aBody,
-      std::string aName,
-      size_t aArity,
-      size_t aLocalsCount);
-
-    Scope *newScope(Scope *aParent, size_t aCount);
-
-    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
-
-    void gc();
-    string dump();
   };
 
 }

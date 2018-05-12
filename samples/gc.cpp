@@ -17,15 +17,15 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
   auto unused = frame->local(4);
   auto notpropname = frame->local(5);
 
-  *obj = engine->newObject(nullptr);
-  *objname = engine->newString("an_obj");
-  *propname = engine->newString("propname");
-  *propval = engine->newString("propval");
-  *unused = engine->newString("unused");
+  *obj = new Object(engine, nullptr);
+  *objname = new String(engine, "an_obj");
+  *propname = new String(engine, "propname");
+  *propval = new String(engine, "propval");
+  *unused = new String(engine, "unused");
 
   // This string is a different instance from the earlier "propname" one,
   // and should not survive GC.
-  *notpropname = engine->newString(std::string("prop") + std::string("name"));
+  *notpropname = new String(engine, std::string("prop") + std::string("name"));
 
   // Retain a couple strings on an object
   // @todo this would be done with a wrapper interface probably
@@ -39,12 +39,18 @@ Val work_body(Engine *engine, Function *func, Frame *frame) {
 int main() {
   Engine engine;
 
+  // todo make a default object on the engine?
+  engine.setRoot(new Object(&engine, nullptr));
+
   // Register the function!
-  auto func = engine.newFunction(
+  auto func = new Function(
+    &engine,
     work_body,
     "work",
     1, // argument count
-    5 // number of locals
+    5, // number of locals
+    nullptr, // no scope capture
+    {} // no args
   );
 
   auto retval = engine.call(func, Null(), {engine.root()});

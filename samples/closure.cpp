@@ -16,7 +16,7 @@ Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
   // note we allocate a lexical scope first for those which are captured
   // by the closure function. That scope will live on separately after
   // the current function ends.
-  Scope* const _scope1 = aEngine->newScope(aFunc->scope(), 1);
+  Scope* const _scope1 = new Scope(aEngine, aFunc->scope(), 1);
   *(aFrame->local(0)) = _scope1;
   Val* const b = _scope1->local(0);
 
@@ -27,7 +27,7 @@ Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
   // function declarations happen at the top of the scope too.
   // This is where we capture the `b` variable's location, knowing
   // its actual value can change.
-  *func = aEngine->newFunction(
+  *func = new Function(aEngine,
     func_body, // implementation
     "func",    // name
     0,         // arg arity
@@ -37,8 +37,8 @@ Val work_body(Engine *aEngine, Function *aFunc, Frame *aFrame) {
   );
 
   // Now we get to the body of the function:
-  *a = aEngine->newString("a");
-  *b = aEngine->newString("b");
+  *a = new String(aEngine, "a");
+  *b = new String(aEngine, "b");
 
   std::cout << "should say 'b': " << b->dump() << "\n";
 
@@ -57,7 +57,7 @@ Val func_body(Engine *engine, Function *func, Frame *frame) {
   Val* const b = func->capture(0);
 
   // replace the variable in the parent scope
-  *b = engine->newString("b plus one");
+  *b = new String(engine, "b plus one");
 
   return Undefined();
 }
@@ -65,12 +65,18 @@ Val func_body(Engine *engine, Function *func, Frame *frame) {
 int main() {
   AotJS::Engine engine;
 
+  // todo make a default object on the engine?
+  engine.setRoot(new Object(&engine, nullptr));
+
   // Register the function!
-  auto work = engine.newFunction(
+  auto work = new Function(
+    &engine,
     work_body,
     "work",
-    1,       // argument count
-    5        // locals count
+    1,        // argument count
+    5,        // locals count
+    nullptr,  // closure scope
+    {}        // captures
   );
 
   engine.call(work, Null(), {});
