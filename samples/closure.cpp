@@ -25,28 +25,28 @@ int main() {
       // by the closure function. That scope will live on separately after
       // the current function ends.
       Scope* const _scope1 = new Scope(aEngine, aFunc->scope(), 1);
-      *(aFrame->local(0)) = _scope1;
-      Val* const b = _scope1->local(0);
+      aFrame->local(0) = _scope1;
+      Val& b = _scope1->local(0);
 
-      Val* const a = aFrame->local(1);
-      Val* const func = aFrame->local(2);
-      Val* const anon_retval = aFrame->local(3);
+      Val& a = aFrame->local(1);
+      Val& func = aFrame->local(2);
+      Val& anon_retval = aFrame->local(3);
 
       // function declarations happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
       // its actual value can change.
-      *func = new Function(aEngine,
+      func = new Function(aEngine,
         // implementation
         [] (Engine *engine, Function *func, Frame *frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //
-          // The capture gives you a pointer into one of the linked Scopes,
+          // The capture gives you a reference into one of the linked Scopes,
           // which are retained via a chain referenced by the Function object.
-          Val* const b = func->capture(0);
+          Val& b = func->capture(0);
 
           // replace the variable in the parent scope
-          *b = new String(engine, "b plus one");
+          b = new String(engine, "b plus one");
 
           return Undefined();
         },
@@ -54,20 +54,20 @@ int main() {
         0,         // arg arity
         0,         // locals
         _scope1,   // lexical scope
-        {b}        // captures
+        {&b}        // captures
       );
 
       // Now we get to the body of the function:
-      *a = new String(aEngine, "a");
-      *b = new String(aEngine, "b");
+      a = new String(aEngine, "a");
+      b = new String(aEngine, "b");
 
-      std::cout << "should say 'b': " << b->dump() << "\n";
+      std::cout << "should say 'b': " << b.dump() << "\n";
 
       // Make the call!
-      *anon_retval = aEngine->call(*func, Null(), {});
+      anon_retval = aEngine->call(func, Null(), {});
 
       // should say "b plus one"
-      std::cout << "should say 'b plus one': " << b->dump() << "\n";
+      std::cout << "should say 'b plus one': " << b.dump() << "\n";
 
       return Undefined();
     },

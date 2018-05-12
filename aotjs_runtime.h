@@ -442,8 +442,8 @@ namespace AotJS {
 
     ~Scope() override;
 
-    Val *local(size_t aIndex) {
-      return &mLocals[aIndex];
+    Val& local(size_t aIndex) {
+      return mLocals[aIndex];
     }
 
     Scope *parent() const {
@@ -521,8 +521,8 @@ namespace AotJS {
     ///
     /// Return one of the captured variable pointers.
     ///
-    Val *capture(size_t aIndex) {
-      return mCaptures[aIndex];
+    Val& capture(size_t aIndex) {
+      return *mCaptures[aIndex];
     }
 
     void markRefsForGC() override;
@@ -579,15 +579,15 @@ namespace AotJS {
     }
 
     ///
-    /// Get a pointer to the first argument.
+    /// Get a reference to the first argument.
     ///
     /// Guaranteed to be valid up to the number of expected arguments
     /// from the function's arity, even if the actual argument arity
     /// is lower.
     ///
-    Val *arg(size_t index) {
+    Val& arg(size_t index) {
       // Args are always at the start of the locals array.
-      return &mLocals[index];
+      return mLocals[index];
     }
 
     ///
@@ -600,8 +600,8 @@ namespace AotJS {
     ///
     /// Return address of a local.
     ///
-    Val *local(size_t index) {
-      return &mLocals[mLocalsOffset + index];
+    Val& local(size_t index) {
+      return mLocals[mLocalsOffset + index];
     }
 
     void markRefsForGC() override;
