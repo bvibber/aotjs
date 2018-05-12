@@ -7,26 +7,24 @@ using namespace AotJS;
 int main() {
   Engine engine;
 
-  // todo make a default object on the engine?
-  engine.setRoot(new Object(&engine, nullptr));
-
   // Register the function!
-  auto func = new Function(
-    &engine,
-    [] (Engine *engine, Function *func, Frame *frame) -> Val {
+  Val func = new Function(
+    engine,
+    [] (Engine& engine, Function& func, Frame& frame) -> Val {
       // Fetch the argument list. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
-      Val& root = frame->arg(0);
+      Val& root = frame.arg(0);
 
-      Val& obj = frame->local(0);
-      Val& objname = frame->local(1);
-      Val& propname = frame->local(2);
-      Val& propval = frame->local(3);
-      Val& unused = frame->local(4);
-      Val& notpropname = frame->local(5);
+      Val& obj = frame.local(0);
+      Val& objname = frame.local(1);
+      Val& propname = frame.local(2);
+      Val& propval = frame.local(3);
+      Val& unused = frame.local(4);
+      Val& notpropname = frame.local(5);
 
-      obj = new Object(engine, nullptr);
+      // Now our function body actually starts!
+      obj = new Object(engine);
       objname = new String(engine, "an_obj");
       propname = new String(engine, "propname");
       propval = new String(engine, "propval");
@@ -38,20 +36,19 @@ int main() {
 
       // Retain a couple strings on an object
       // @todo this would be done with a wrapper interface probably
-      obj.asObject()->setProp(propname, propval);
+      obj.asObject().setProp(propname, propval);
 
-      root.asObject()->setProp(objname, obj);
+      root.asObject().setProp(objname, obj);
 
       return Undefined();
     },
     "work",
     1, // argument count
-    5, // number of locals
-    nullptr, // no scope capture
-    {} // no args
+    5  // number of locals
+    // no scope capture
   );
 
-  auto retval = engine.call(func, Null(), {engine.root()});
+  auto retval = engine.call(func, Null(), {(Val)&engine.root()});
 
   std::cout << "before gc\n";
   std::cout << engine.dump();

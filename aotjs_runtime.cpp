@@ -54,7 +54,7 @@ namespace AotJS {
     } else if (isUndefined()) {
       buf << "undefined";
     } else if (isJSThing()) {
-      buf << asJSThing()->dump();
+      buf << asJSThing().dump();
     }
     return buf.str();
   }
@@ -144,11 +144,11 @@ namespace AotJS {
 
       // prop names are always either strings or symbols,
       // so they are pointers to GCThings.
-      prop_name.asJSThing()->markForGC();
+      prop_name.asJSThing().markForGC();
 
       // prop values may not be, so check!
       if (prop_val.isJSThing()) {
-        prop_val.asJSThing()->markForGC();
+        prop_val.asJSThing().markForGC();
       }
     }
   }
@@ -225,7 +225,7 @@ namespace AotJS {
 
     for (auto local : mLocals) {
       if (local.isJSThing()) {
-        local.asJSThing()->markRefsForGC();
+        local.asJSThing().markRefsForGC();
       }
     }
   }
@@ -250,12 +250,12 @@ namespace AotJS {
     mFunc->markRefsForGC();
 
     if (mThis.isJSThing()) {
-      mThis.asJSThing()->markRefsForGC();
+      mThis.asJSThing().markRefsForGC();
     }
 
     for (auto val : mLocals) {
       if (val.isJSThing()) {
-        val.asJSThing()->markRefsForGC();
+        val.asJSThing().markRefsForGC();
       }
     }
   }
@@ -290,26 +290,32 @@ namespace AotJS {
 
   #pragma mark Engine
 
-  void Engine::registerForGC(GCThing *obj) {
+  Engine::Engine() {
+    mRoot = new Object(*this);
+    mScope = nullptr;
+    mFrame = nullptr;
+  }
+
+  void Engine::registerForGC(GCThing& obj) {
     // Because we don't yet control the allocation, we don't know how to walk
     // the heap looking for all objects. Instead, we need to keep a separate
     // set of all objects in order to do the final sweep.
-    mObjects.insert(obj);
+    mObjects.insert(&obj);
   }
 
-  Frame *Engine::pushFrame(
-    Function *aFunc,
+  Frame& Engine::pushFrame(
+    Function& aFunc,
     Val aThis,
     std::vector<Val> aArgs)
   {
-    auto frame = new Frame(this, mFrame, aFunc, aThis, aArgs);
+    auto frame = new Frame(*this, *mFrame, aFunc, aThis, aArgs);
     mFrame = frame;
-    return frame;
+    return *frame;
   }
 
   void Engine::popFrame() {
     if (mFrame) {
-      mFrame = mFrame->parent();
+      mFrame = &mFrame->parent();
     } else {
       // should not happen!
       std::abort();
@@ -320,7 +326,7 @@ namespace AotJS {
     if (aFunc.isFunction()) {
       auto func = aFunc.asFunction();
       auto frame = pushFrame(func, aThis, aArgs);
-      auto retval = func->body()(this, func, frame);
+      auto retval = func.body()(*this, func, frame);
       popFrame();
       return retval;
     } else {

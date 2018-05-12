@@ -45,7 +45,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Val (*FunctionBody)(Engine *engine, Function *func, Frame *frame);
+  typedef Val (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -62,29 +62,23 @@ namespace AotJS {
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
     unordered_set<GCThing *> mObjects;
-    void registerForGC(GCThing *aObj);
+    void registerForGC(GCThing& aObj);
     friend class GCThing;
 
-    Frame *newFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
-    Frame *pushFrame(Function *aFunc, Val aThis, std::vector<Val> aArgs);
+    Frame& pushFrame(Function& aFunc, Val aThis, std::vector<Val> aArgs);
     void popFrame();
 
   public:
-    Engine()
-    :
-      mRoot(nullptr),
-      mScope(nullptr),
-      mFrame(nullptr)
-    {
-      //
+    // Todo allow specializing the root object at instantiation time?
+    Engine();
+
+    // ick!
+    void setRoot(Object& aRoot) {
+      mRoot = &aRoot;
     }
 
-    void setRoot(Object* aRoot) {
-      mRoot = aRoot;
-    }
-
-    Object *root() const {
-      return mRoot;
+    Object& root() const {
+      return *mRoot;
     }
 
     Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
@@ -103,11 +97,11 @@ namespace AotJS {
     bool mMarked;
 
   public:
-    GCThing(Engine* aEngine)
+    GCThing(Engine& aEngine)
     :
       mMarked(false)
     {
-      aEngine->registerForGC(this);
+      aEngine.registerForGC(*this);
     }
 
     virtual ~GCThing();
@@ -137,7 +131,7 @@ namespace AotJS {
   ///
   class JSThing : public GCThing {
   public:
-    JSThing(Engine *aEngine)
+    JSThing(Engine& aEngine)
     : GCThing(aEngine)
     {
       //
@@ -202,9 +196,12 @@ namespace AotJS {
     Val(bool aVal)       : mRaw(((uint64_t)aVal & ~tag_mask) | tag_bool) {}
     Val(Undefined aVal)  : mRaw(tag_undefined) {}
     Val(Null aVal)       : mRaw(tag_null) {}
-    Val(String *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_string) {}
-    Val(Symbol *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_symbol) {}
-    Val(Object *aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
+    Val(String* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_string) {}
+    Val(Symbol* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_symbol) {}
+    Val(Object* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
+    Val(String& aVal)    : Val(&aVal) {}
+    Val(Symbol& aVal)    : Val(&aVal) {}
+    Val(Object& aVal)    : Val(&aVal) {}
 
     Val &operator=(const Val &aVal) {
       mRaw = aVal.mRaw;
@@ -263,7 +260,7 @@ namespace AotJS {
 
     bool isFunction() const {
       // currently no room for a separate function type. not sure about this.
-      return isJSThing() && (asJSThing()->typeof() == typeof_function);
+      return isJSThing() && (asJSThing().typeof() == typeof_function);
     }
 
     double asDouble() const {
@@ -295,6 +292,7 @@ namespace AotJS {
         // 64-bit host -- drop the top 16 bits of NaN and tag.
         // Assumes address space has only 48 significant bits
         // but may be signed, as on x86_64.
+        // todo fix, we lost that sign extension. but it works?
         return reinterpret_cast<void *>((mRaw << 16) >> 16);
       #else
         // 32 bit host -- bottom bits are ours, like an int.
@@ -302,24 +300,24 @@ namespace AotJS {
       #endif
     }
 
-    JSThing *asJSThing() const {
-      return static_cast<JSThing *>(asPointer());
+    JSThing& asJSThing() const {
+      return *static_cast<JSThing *>(asPointer());
     }
 
-    String *asString() const {
-      return static_cast<String *>(asPointer());
+    String& asString() const {
+      return *static_cast<String *>(asPointer());
     }
 
-    Symbol *asSymbol() const {
-      return static_cast<Symbol *>(asPointer());
+    Symbol& asSymbol() const {
+      return *static_cast<Symbol *>(asPointer());
     }
 
-    Object *asObject() const {
-      return static_cast<Object *>(asPointer());
+    Object& asObject() const {
+      return *static_cast<Object *>(asPointer());
     }
 
-    Function *asFunction() const {
-      return static_cast<Function *>(asPointer());
+    Function& asFunction() const {
+      return *static_cast<Function *>(asPointer());
     }
 
     bool operator==(const Val &rhs) const;
@@ -339,7 +337,7 @@ namespace AotJS {
 
   class PropIndex : public JSThing {
   public:
-    PropIndex(Engine* aEngine)
+    PropIndex(Engine& aEngine)
     : JSThing(aEngine) {}
 
     ~PropIndex() override;
@@ -349,7 +347,7 @@ namespace AotJS {
     string data;
 
   public:
-    String(Engine* aEngine, string const &aStr)
+    String(Engine& aEngine, string const &aStr)
     : PropIndex(aEngine),
       data(aStr)
     {
@@ -375,7 +373,7 @@ namespace AotJS {
     string name;
 
   public:
-    Symbol(Engine* aEngine, string const &aName)
+    Symbol(Engine& aEngine, string const &aName)
     : PropIndex(aEngine),
       name(aName)
     {
@@ -405,9 +403,16 @@ namespace AotJS {
     unordered_map<Val,Val> mProps;
 
   public:
-    Object(Engine *aEngine, Object *aPrototype)
+    Object(Engine& aEngine)
     : JSThing(aEngine),
-      mPrototype(aPrototype)
+      mPrototype(nullptr)
+    {
+      //
+    }
+
+    Object(Engine& aEngine, Object& aPrototype)
+    : JSThing(aEngine),
+      mPrototype(&aPrototype)
     {
       // Note this doesn't call the constructor,
       // which would be done by outside code.
@@ -432,9 +437,9 @@ namespace AotJS {
     std::vector<Val> mLocals;
 
   public:
-    Scope(Engine *aEngine, Scope *aParent, size_t aCount)
+    Scope(Engine& aEngine, Scope& aParent, size_t aCount)
     : GCThing(aEngine),
-      mParent(aParent),
+      mParent(&aParent),
       mLocals(aCount, Undefined())
     {
       //
@@ -446,8 +451,8 @@ namespace AotJS {
       return mLocals[aIndex];
     }
 
-    Scope *parent() const {
-      return mParent;
+    Scope &parent() const {
+      return *mParent;
     }
 
     void markRefsForGC() override;
@@ -467,19 +472,37 @@ namespace AotJS {
     std::vector<Val *> mCaptures;
 
   public:
-    Function(Engine *aEngine,
+    // For function with no captures
+    Function(Engine& aEngine,
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      size_t aLocalsCount,
-      Scope *aScope,
-      std::vector<Val *> aCaptures)
-    : Object(aEngine, nullptr), // todo: have a function prototype object!
+      size_t aLocalsCount)
+    : Object(aEngine), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
       mLocalsCount(aLocalsCount),
-      mScope(aScope),
+      mScope(nullptr),
+      mCaptures()
+    {
+      //
+    }
+
+    // For function with captures
+    Function(Engine& aEngine,
+      FunctionBody aBody,
+      std::string aName,
+      size_t aArity,
+      size_t aLocalsCount,
+      Scope& aScope,
+      std::vector<Val *> aCaptures)
+    : Object(aEngine), // todo: have a function prototype object!
+      mBody(aBody),
+      mName(aName),
+      mArity(aArity),
+      mLocalsCount(aLocalsCount),
+      mScope(&aScope),
       mCaptures(aCaptures)
     {
       //
@@ -514,8 +537,8 @@ namespace AotJS {
     ///
     /// The lexical capture scope.
     ///
-    Scope *scope() const {
-      return mScope;
+    Scope& scope() const {
+      return *mScope;
     }
 
     ///
@@ -542,14 +565,14 @@ namespace AotJS {
     std::vector<Val> mLocals;
 
   public:
-    Frame(Engine *aEngine,
-      Frame *aParent,
-      Function *aFunc,
+    Frame(Engine& aEngine,
+      Frame& aParent,
+      Function& aFunc,
       Val aThis,
       std::vector<Val> aArgs)
     : GCThing(aEngine),
-      mParent(aParent),
-      mFunc(aFunc),
+      mParent(&aParent),
+      mFunc(&aFunc),
       mThis(aThis),
       mArity(aArgs.size()),
       // Store args at the beginning of the locals vector.
@@ -570,12 +593,12 @@ namespace AotJS {
 
     ~Frame() override;
 
-    Frame *parent() const {
-      return mParent;
+    Frame& parent() const {
+      return *mParent;
     }
 
-    Function *func() const {
-      return mFunc;
+    Function& func() const {
+      return *mFunc;
     }
 
     ///
