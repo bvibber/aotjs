@@ -1,7 +1,7 @@
 SOURCES=aotjs_runtime.cpp
 HEADERS=aotjs_runtime.h
 #CFLAGS=-g -O0 -std=c++14 -DDEBUG
-CFLAGS=-O2 -std=c++14
+CFLAGS=-Os -std=c++14
 CFLAGS_NATIVE=$(CFLAGS)
 CFLAGS_WASM=$(CFLAGS) -s WASM=1 -s BINARYEN_TRAP_MODE=clamp -s NO_FILESYSTEM=1
 
@@ -9,7 +9,7 @@ all : native wasm
 
 native : gc closure
 
-wasm : gc.html closure.html
+wasm : gc.js closure.js
 
 clean :
 	rm -f gc
@@ -33,8 +33,8 @@ gc : samples/gc.cpp $(SOURCES) $(HEADERS)
 closure : samples/closure.cpp $(SOURCES) $(HEADERS)
 	clang++ $(CFLAGS_NATIVE) -o closure samples/closure.cpp $(SOURCES)
 
-gc.html : samples/gc.cpp $(SOURCES) $(HEADERS)
-	em++ $(CFLAGS_WASM) -o gc.html samples/gc.cpp $(SOURCES)
+gc.js : samples/gc.cpp $(SOURCES) $(HEADERS)
+	em++ $(CFLAGS_WASM) -o gc.js samples/gc.cpp $(SOURCES)
 
-closure.html : samples/closure.cpp $(SOURCES) $(HEADERS)
-	em++ $(CFLAGS_WASM) -o closure.html samples/closure.cpp $(SOURCES)
+closure.js : samples/closure.cpp $(SOURCES) $(HEADERS)
+	em++ $(CFLAGS_WASM) -o closure.js samples/closure.cpp $(SOURCES)
