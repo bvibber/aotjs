@@ -229,19 +229,32 @@ namespace AotJS {
 
   void Scope::markRefsForGC() {
     if (mParent) {
-      mParent->markRefsForGC();
+      mParent->markForGC();
     }
 
     for (auto local : mLocals) {
+      #ifdef DEBUG
+      std::cerr << "-- marking Scope local: " << local.dump() << "\n";
+      #endif
       if (local.isJSThing()) {
-        local.asJSThing().markRefsForGC();
+        local.asJSThing().markForGC();
       }
     }
   }
 
   string Scope::dump() {
     std::ostringstream buf;
-    buf << "Scope(...)";
+    buf << "Scope([";
+    bool first = true;
+    for (auto local : mLocals) {
+      if (first) {
+        first = false;
+      } else {
+        buf << ",";
+      }
+      buf << local.dump();
+    }
+    buf << "])";
     return buf.str();
   }
 
@@ -253,13 +266,13 @@ namespace AotJS {
 
   void Frame::markRefsForGC() {
     if (mParent) {
-      mParent->markRefsForGC();
+      mParent->markForGC();
     }
 
-    mFunc->markRefsForGC();
+    mFunc->markForGC();
 
     if (mThis.isJSThing()) {
-      mThis.asJSThing().markRefsForGC();
+      mThis.asJSThing().markForGC();
     }
   }
 
@@ -281,7 +294,7 @@ namespace AotJS {
 
   void Function::markRefsForGC() {
     if (mScope) {
-      mScope->markRefsForGC();
+      mScope->markForGC();
     }
   }
 
@@ -364,7 +377,7 @@ namespace AotJS {
 
   void Engine::gc() {
     #ifdef DEBUG
-    std::cerr << "starting gc mark/sweep:\n";
+    std::cerr << "starting gc mark/sweep: " << dump() <<"\n";
     #endif
 
     // 1) Mark!
