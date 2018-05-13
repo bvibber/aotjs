@@ -183,7 +183,7 @@ can fail on AArch64.
 JSC uses a different format, with a bias added to doubles to shift NaNs
 around so that pointers always have 0x0000 in the top 16 bits (giving you
 48 bits of addressing, still potentially problematic), 0xffff for 32-bit
-ints, and 0x0001 for the shifted doubles.
+ints, and 0x0001..0xfffe for the shifted doubles.
 
 The biggest differences between the two are that SpiderMonkey's system is
 double-biased (you don't have to manipulate a double to get it in/out) and
