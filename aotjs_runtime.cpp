@@ -107,7 +107,7 @@ namespace AotJS {
     return typeof_object;
   }
 
-  static Local normalizePropName(Local aName) {
+  static Val normalizePropName(Val aName) {
     if (aName.isString()) {
       return aName;
     } else if (aName.isSymbol()) {
@@ -125,8 +125,9 @@ namespace AotJS {
 
   // todo: handle numeric indices
   // todo: getters
-  Local Object::getProp(Local aName) {
-    Local name = normalizePropName(aName);
+  Val Object::getProp(Val aName) {
+    // fixme retain this properly with a scope
+    Val name = normalizePropName(aName);
     auto index = mProps.find(name);
     if (index == mProps.end()) {
       if (mPrototype) {
@@ -139,7 +140,8 @@ namespace AotJS {
     }
   }
 
-  void Object::setProp(Local aName, Local aVal) {
+  void Object::setProp(Val aName, Val aVal) {
+    // fixme retain this properly with a scope
     auto name = normalizePropName(aName);
     mProps.emplace(name, aVal);
   }
@@ -323,10 +325,10 @@ namespace AotJS {
     }
   }
 
-  Scope& pushScope(size_t aSize) {
+  Scope& Engine::pushScope(size_t aSize) {
     auto scope = new Scope(*this, *mScope, aSize);
     mScope = scope;
-    return scope;
+    return *scope;
   }
 
   void Engine::popScope() {
@@ -338,11 +340,12 @@ namespace AotJS {
     }
   }
 
-  Local Engine::call(Local aFunc, Local aThis, std::vector<Val> aArgs) {
+  Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
     if (aFunc.isFunction()) {
       auto func = aFunc.asFunction();
       auto frame = pushFrame(func, aThis, aArgs);
-      Local retval = func.body()(*this, func, frame);
+      Val retval = func.body()(*this, func, frame);
+      // we know popFrame can't trigger GC
       popFrame();
       return retval;
     } else {
@@ -364,20 +367,6 @@ namespace AotJS {
 
     if (mFrame) {
       mFrame->markForGC();
-    }
-
-    // Check for anything held open by stack frames in a Local.
-    for (auto obj : mObjects) {
-      if (obj->refCount()) {
-        obj->markForGC();
-        #ifdef DEBUG
-        std::cerr << "refed " << obj->refCount() << ": " + obj->dump() + "\n";
-        #endif
-      } else {
-        #ifdef DEBUG
-        std::cerr << "unrefed: " + obj->dump() + "\n";
-        #endif
-      }
     }
 
     // 2) Sweep!

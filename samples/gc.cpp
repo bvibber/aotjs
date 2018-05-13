@@ -31,8 +31,13 @@ int main() {
       Val& root = frame.arg(0);
 
       // Local variable definitions are hoisted to the top.
-      // They are all initialized to Undefined().
-      // These are variant wrappers which are also retained while in scope.
+      // They are all initialized to Undefined() at Scope creation.
+      // These are variant wrappers which are also retained while it's on
+      // the live-scope-call stack.
+      //
+      // This could be made prettier in C++17 with destructuring and
+      // templates for the item count, but let's be explicit for what the
+      // low-level code does.
       Val& obj = scope[0];
       Val& objname = scope[1];
       Val& propname = scope[2];

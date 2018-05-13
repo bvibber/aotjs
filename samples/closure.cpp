@@ -15,7 +15,7 @@ int main() {
     engine,
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Engine& aEngine, Function& aFunc, Frame& aFrame) -> Local {
+    [] (Engine& aEngine, Function& aFunc, Frame& aFrame) -> Val {
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
@@ -26,8 +26,8 @@ int main() {
       //
       // Todo make this prettier?
       // Todo have a better facility for immutable bindings.
-      auto _locals = engine.pushScope(2);
-      auto _closure1 = engine.pushScope(1);
+      auto _locals = aEngine.pushScope(2);
+      auto _closure1 = aEngine.pushScope(1);
 
       Val& a = _locals[0];
       Val& b = _closure1[0];
@@ -38,7 +38,7 @@ int main() {
       // its actual value can change.
       func = new Function(aEngine,
         // implementation
-        [] (Engine& engine, Function& func, Frame& frame) -> Local {
+        [] (Engine& engine, Function& func, Frame& frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //

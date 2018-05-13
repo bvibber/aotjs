@@ -29,7 +29,6 @@ namespace AotJS {
   extern Typeof typeof_object;
 
   class Val;
-  class Local;
 
   class GCThing;
   class Scope;
@@ -53,7 +52,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Local (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
+  typedef Val (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -89,10 +88,10 @@ namespace AotJS {
       return *mRoot;
     }
 
-    RetainedScope pushScope(size_t aSize);
+    Scope& pushScope(size_t aSize);
     void popScope();
 
-    Local call(Local aFunc, Local aThis, std::vector<Val> aArgs);
+    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
 
     void gc();
     string dump();
@@ -106,16 +105,6 @@ namespace AotJS {
   ///
   class GCThing {
     ///
-    /// Reference count for stack-frame-based refs via Local.
-    /// If count is non-zero, GC treats object as referenced
-    /// and keeps it alive.
-    ///
-    /// This is needed because there's no way to introspect
-    /// native WebAssembly stack frames for their local values.
-    ///
-    size_t mRefCount;
-
-    ///
     /// GC mark state -- normally false, except during GC marking
     /// when it records true if the object is reachable.
     ///
@@ -124,7 +113,6 @@ namespace AotJS {
   public:
     GCThing(Engine& aEngine)
     :
-      mRefCount(0),
       mMarked(false)
     {
       // We need a set of *all* allocated objects to do sweep.
@@ -134,30 +122,7 @@ namespace AotJS {
 
     virtual ~GCThing();
 
-    // To be called only by Local...
-    void retain() {
-      #ifdef DEBUG
-      std::cout << "retain(" << mRefCount << "++) " << this << " " << dump() << "\n";
-      #endif
-      mRefCount++;
-    }
-
-    void release() {
-      #ifdef DEBUG
-      std::cout << "release(" << mRefCount << "--) " << this << " " << dump() << "\n";
-      if (mRefCount == 0) {
-        // should not happen
-        std::abort();
-      }
-      #endif
-      mRefCount--;
-    }
-
     // To be called only by Engine...
-
-    size_t refCount() const {
-      return mRefCount;
-    }
 
     bool isMarkedForGC() const {
       return mMarked;
@@ -385,253 +350,6 @@ namespace AotJS {
     string dump() const;
   };
 
-  ///
-  /// Represents a JavaScript variable (Val) wrapped in a reference count.
-  /// Using this for local variables keeps them alive in case of GC, since
-  /// there's no way to walk the WebAssembly stack to find them.
-  ///
-  class alignas(8) Local {
-    Val mVal;
-
-  public:
-    Local()
-    : mVal(Undefined())
-    {
-      // primitive
-    }
-
-    Local(double aVal)
-    : mVal(aVal)
-    {
-      // primitive
-    }
-
-    Local(int32_t aVal)
-    : mVal(aVal)
-    {
-      // primitive
-    }
-
-    Local(bool aVal)
-    : mVal(aVal)
-    {
-      // primitive
-    }
-
-    Local(Null aVal)
-    : mVal(aVal)
-    {
-      // primitive
-    }
-
-    Local(Undefined aVal)
-    : mVal(aVal)
-    {
-      // primitive
-    }
-
-    Local(GCThing *aVal)
-    : mVal(aVal)
-    {
-      aVal->retain();
-    }
-
-    Local(String *aVal)
-    : mVal(aVal) {
-      reinterpret_cast<GCThing*>(aVal)->retain();
-    }
-
-    Local(Symbol *aVal)
-    : mVal(aVal)
-    {
-      reinterpret_cast<GCThing*>(aVal)->retain();
-    }
-
-    Local(Object *aVal)
-    : mVal(aVal)
-    {
-      reinterpret_cast<GCThing*>(aVal)->retain();
-    }
-
-    Local(Function *aVal)
-    : mVal(aVal)
-    {
-      reinterpret_cast<GCThing*>(aVal)->retain();
-    }
-
-    Local(String& aVal) : Local(&aVal) {}
-    Local(Symbol& aVal) : Local(&aVal) {}
-    Local(Object& aVal) : Local(&aVal) {}
-    Local(Function& aVal) : Local(&aVal) {}
-
-    Local(Val aVal)
-    : mVal(aVal)
-    {
-      if (mVal.isJSThing()) {
-        mVal.asJSThing().retain();
-      }
-    }
-
-    // copy constructor
-    Local(const Local &aLocal)
-    : mVal(aLocal.mVal)
-    {
-      if (mVal.isJSThing()) {
-        mVal.asJSThing().retain();
-      }
-    }
-
-    // assignment operator also needed
-    // or else everything goes to hell
-    //
-    // todo make these for primitive types too
-    Local &operator=(const Local &aLocal) {
-      if (isJSThing()) {
-        mVal.asJSThing().release();
-      }
-      mVal = aLocal.mVal;
-      if (isJSThing()) {
-        mVal.asJSThing().retain();
-      }
-      return *this;
-    }
-
-    // todo implement move semantics?
-
-    ~Local() {
-      if (mVal.isJSThing()) {
-        mVal.asJSThing().release();
-      }
-    }
-
-    bool isDouble() const {
-      return mVal.isDouble();
-    }
-
-    bool isInt32() const {
-      return mVal.isInt32();
-    }
-
-    bool isBool() const {
-      return mVal.isBool();
-    }
-
-    bool isJSThing() const {
-      return mVal.isJSThing();
-    }
-
-    bool isString() const {
-      return mVal.isString();
-    }
-
-    bool isSymbol() const {
-      return mVal.isSymbol();
-    }
-
-    bool isObject() const {
-      return mVal.isObject();
-    }
-
-    bool isFunction() const {
-      return mVal.isFunction();
-    }
-
-    JSThing& asJSThing() const {
-      return mVal.asJSThing();
-    }
-
-    String& asString() const {
-      return mVal.asString();
-    }
-
-    Symbol& asSymbol() const {
-      return mVal.asSymbol();
-    }
-
-    Object& asObject() const {
-      return mVal.asObject();
-    }
-
-    Function& asFunction() const {
-      return mVal.asFunction();
-    }
-
-    bool operator==(const Local &rhs) const {
-      return mVal == rhs.mVal;
-    }
-
-    operator Val() const {
-      return mVal;
-    }
-
-    string dump() const {
-      return mVal.dump();
-    }
-  };
-
-  template <class T>
-  class Retained {
-    T *mPtr;
-
-  public:
-    Retained()
-    : mPtr(nullptr) {
-      //
-    }
-
-    Retained (T* aPtr)
-    : mPtr(aPtr)
-    {
-      mPtr->retain();
-    }
-
-    Retained (T& aRef)
-    : Retained(&aRef)
-    {
-    }
-
-    ~Retained() {
-      mPtr->release();
-    }
-
-    T* operator->() {
-      return mPtr;
-    }
-
-    Retained<T>& operator=(const T& aRef) {
-      if (mPtr) {
-        mPtr->release();
-      }
-      mPtr = &aRef;
-      mPtr->retain();
-    }
-
-    Retained<T>& operator=(T* aPtr) {
-      if (mPtr) {
-        mPtr->release();
-      }
-      mPtr = aPtr;
-      if (mPtr) {
-        mPtr->retain();
-      }
-    }
-
-    operator T*() {
-      return mPtr;
-    }
-
-    operator Val() {
-      return Val(static_cast<GCThing *>(mPtr));
-    }
-
-  };
-
-  template<class T, class... U>
-  Retained<T> retained(U&&... aArgs)
-  {
-    return Retained<T>(new T(aArgs...));
-  }
-
 }
 
 namespace std {
@@ -731,8 +449,8 @@ namespace AotJS {
     string dump() override;
     Typeof typeof() const override;
 
-    Local getProp(Local name);
-    void setProp(Local name, Local val);
+    Val getProp(Val name);
+    void setProp(Val name, Val val);
   };
 
   ///
@@ -802,13 +520,13 @@ namespace AotJS {
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      Retained<Scope> aScope,
-      std::vector<Val *> aCaptures)
+      Scope& aScope,
+      std::vector<Val*> aCaptures)
     : Object(aEngine), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
-      mScope(aScope),
+      mScope(&aScope),
       mCaptures(aCaptures)
     {
       //
@@ -904,7 +622,6 @@ namespace AotJS {
     /// is lower.
     ///
     Val& arg(size_t index) {
-      // Args are always at the start of the locals array.
       return mArgs[index];
     }
 
