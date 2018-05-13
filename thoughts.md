@@ -165,6 +165,46 @@ console.log(a); // "ab"
 
 ```
 
+# NaN-boxing
+
+NaN boxing makes use of the NaN space in double-precision floating point
+numbers, so variable-type values can be stored in a single 64-bit word.
+If the top 13 bits are all set, we have a "signalling NaN" that can't be
+produced by natural operations, so we can use the remaining 51 bits for
+a type tag and a payload.
+
+For 32-bit targets like WebAssembly this leaves you plenty of space for
+a 32-bit pointer! However on 64-bit native targets it's more worrisome.
+
+SpiderMonkey uses NaN boxing with 4 bits of tag space and up to 47 bits of
+pointer addressing, which is enough for current x86-64 code in user space, but
+can fail on AArch64.
+
+JSC uses a different format, with a bias added to doubles to shift NaNs
+around so that pointers always have 0x0000 in the top 16 bits (giving you
+48 bits of addressing, still potentially problematic), 0xffff for 32-bit
+ints, and 0x0001 for the shifted doubles.
+
+The biggest differences between the two are that SpiderMonkey's system is
+double-biased (you don't have to manipulate a double to get it in/out) and
+JSC's is object-biased (you don't have to manipulate a pointer to get it
+in/out). Since most JS code uses more objects than doubles, that may be a win.
+On 32-bit it makes less difference, but is still maybe nicer for letting
+you do a single 32-to-64 extend opcode instead of extending and then ORing
+the tag. It does mean that the -Infinity value has to be stored as another
+NaN value.
+
+* [SpiderMonkey thinking of changing their boxing format](https://bugzilla.mozilla.org/show_bug.cgi?id=1401624)
+* [JSC's format](https://github.com/adobe/webkit/blob/master/Source/JavaScriptCore/runtime/JSValue.h#L307)
+
+Currently I'm using a format similar to SpiderMonkey's but using only 3 bits
+for the tag (8 types), so top 16 bits is (signalling nan + tag) and bottom
+48 bits is the pointer payload.
+
+One downside is that the constants for the tag checks are large, and get
+encoded at every check site. Alternately could right-shift by 48 and compare
+against smaller constants, but that's probably an extra clock cycle vs extra
+bytes in the binary.
 
 # Naive implementation
 
