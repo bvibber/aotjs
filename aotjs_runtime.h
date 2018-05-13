@@ -566,6 +566,63 @@ namespace AotJS {
     }
   };
 
+  template <class T>
+  class Retained {
+    T *mPtr;
+
+  public:
+    Retained()
+    : mPtr(nullptr) {
+      //
+    }
+
+    Retained (T* aPtr)
+    : mPtr(aPtr)
+    {
+      mPtr->retain();
+    }
+
+    Retained (T& aRef)
+    : Retained(&aRef)
+    {
+    }
+
+    ~Retained() {
+      mPtr->release();
+    }
+
+    T* operator->() {
+      return mPtr;
+    }
+
+    Retained<T>& operator=(const T& aRef) {
+      if (mPtr) {
+        mPtr->release();
+      }
+      mPtr = &aRef;
+      mPtr->retain();
+    }
+
+    Retained<T>& operator=(T* aPtr) {
+      if (mPtr) {
+        mPtr->release();
+      }
+      mPtr = aPtr;
+      if (mPtr) {
+        mPtr->retain();
+      }
+    }
+
+    operator T*() {
+      return mPtr;
+    }
+
+    operator Val() {
+      return Val(static_cast<GCThing *>(mPtr));
+    }
+
+  };
+
 }
 
 namespace std {
@@ -732,13 +789,13 @@ namespace AotJS {
       FunctionBody aBody,
       std::string aName,
       size_t aArity,
-      Scope& aScope,
+      Retained<Scope> aScope,
       std::vector<Val *> aCaptures)
     : Object(aEngine), // todo: have a function prototype object!
       mBody(aBody),
       mName(aName),
       mArity(aArity),
-      mScope(&aScope),
+      mScope(aScope),
       mCaptures(aCaptures)
     {
       //

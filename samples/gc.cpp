@@ -11,10 +11,13 @@ int main() {
   Local func = new Function(
     engine,
     [] (Engine& engine, Function& func, Frame& frame) -> Local {
-      // Fetch the argument refs. The function arity must be correct!
+      // Fetch the arguments. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
-      Val& root = frame.arg(0);
+      //
+      // Note we use a Local here, not a Val&, because the binding is
+      // local to the function body.
+      Local root = frame.arg(0);
 
       // Local variable definitions are hoisted to the top.
       // They are all initialized to Undefined().

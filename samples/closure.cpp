@@ -24,9 +24,8 @@ int main() {
       // by the closure function. That scope will live on separately after
       // the current function ends.
       //
-      Scope* const _scope1 = new Scope(aEngine, aFunc.scope(), 1);
-      //Local _scopeval = _scope1; // meh make this prettier
-      // FIXME
+      // Todo make this prettier with arg forwarding?
+      Retained<Scope> _scope1(new Scope(aEngine, aFunc.scope(), 1));
 
       Local a;
       Val& b = _scope1->local(0);
@@ -52,7 +51,7 @@ int main() {
         },
         "func",    // name
         0,         // arg arity
-        *_scope1,  // lexical scope
+        _scope1,   // lexical scope
         {&b}       // captures
       );
 
