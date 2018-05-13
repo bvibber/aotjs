@@ -89,6 +89,9 @@ namespace AotJS {
       return *mRoot;
     }
 
+    RetainedScope pushScope(size_t aSize);
+    void popScope();
+
     Local call(Local aFunc, Local aThis, std::vector<Val> aArgs);
 
     void gc();
@@ -752,6 +755,10 @@ namespace AotJS {
     ~Scope() override;
 
     Val& local(size_t aIndex) {
+      return mLocals[aIndex];
+    }
+
+    Val& operator[](size_t aIndex) {
       return mLocals[aIndex];
     }
 

@@ -7,28 +7,38 @@ using namespace AotJS;
 int main() {
   Engine engine;
 
+  // All non-captured local variables will live in this scope,
+  // to protect them from being GC'd. We must pop it at the end
+  // of the function.
+  //
+  // Beware that temporary variables in function call parameters and such
+  // may be GC'd in some cases, so always stick things immediately in here
+  // on allocation!
+  auto& scope = engine.pushScope(1);
+  Val& func = scope[0];
+
   // Register the function!
-  Local func = new Function(
+  func = new Function(
     engine,
-    [] (Engine& engine, Function& func, Frame& frame) -> Local {
+    [] (Engine& engine, Function& func, Frame& frame) -> Val {
+      auto scope = engine.pushScope(6);
+
       // Fetch the arguments. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
       //
-      // Note we use a Val& here, not a Local wrapper, since the arg list
-      // is already held against GC.
-      // If it were captured, though, we'd have to copy it.
+      // If it were captured, though, we'd have to copy it into locals below.
       Val& root = frame.arg(0);
 
       // Local variable definitions are hoisted to the top.
       // They are all initialized to Undefined().
       // These are variant wrappers which are also retained while in scope.
-      Local obj;
-      Local objname;
-      Local propname;
-      Local propval;
-      Local unused;
-      Local notpropname;
+      Val& obj = scope[0];
+      Val& objname = scope[1];
+      Val& propname = scope[2];
+      Val& propval = scope[3];
+      Val& unused = scope[4];
+      Val& notpropname = scope[5];
 
       // Now our function body actually starts!
       obj = new Object(engine);
@@ -46,6 +56,8 @@ int main() {
       obj.asObject().setProp(propname, propval);
 
       root.asObject().setProp(objname, obj);
+
+      engine.popScope();
 
       return Undefined();
     },

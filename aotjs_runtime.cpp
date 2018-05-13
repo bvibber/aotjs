@@ -323,6 +323,21 @@ namespace AotJS {
     }
   }
 
+  Scope& pushScope(size_t aSize) {
+    auto scope = new Scope(*this, *mScope, aSize);
+    mScope = scope;
+    return scope;
+  }
+
+  void Engine::popScope() {
+    if (mScope) {
+      mScope = &mScope->parent();
+    } else {
+      // should not happen!
+      std::abort();
+    }
+  }
+
   Local Engine::call(Local aFunc, Local aThis, std::vector<Val> aArgs) {
     if (aFunc.isFunction()) {
       auto func = aFunc.asFunction();

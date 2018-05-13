@@ -7,8 +7,11 @@ using namespace AotJS;
 int main() {
   AotJS::Engine engine;
 
+  auto& locals = engine.pushScope(1);
+  Val& work = locals[0];
+
   // Register the function!
-  Local work = new Function(
+  work = new Function(
     engine,
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
@@ -17,19 +20,18 @@ int main() {
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
       //
-      // We allocate them as native local vars if they're not captured, with
-      // a `Local` wrapper to ensure they stay alive in case of GC.
+      // We allocate them in Scopes, which are kept on a stack while we
+      // run and, in the case of closure captures, can live on beyond
+      // the function end.
       //
-      // Note we allocate a lexical scope first for those which are captured
-      // by the closure function. That scope will live on separately after
-      // the current function ends.
-      //
-      // Todo make this prettier with arg forwarding?
-      auto _closure1 = retained<Scope>(aEngine, aFunc.scope(), 1);
+      // Todo make this prettier?
+      // Todo have a better facility for immutable bindings.
+      auto _locals = engine.pushScope(2);
+      auto _closure1 = engine.pushScope(1);
 
-      Local a;
-      Val& b = _closure1->local(0);
-      Local func;
+      Val& a = _locals[0];
+      Val& b = _closure1[0];
+      Val& func = _locals[1];
 
       // function declarations/definitions happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
@@ -67,6 +69,12 @@ int main() {
       // should say "b plus one"
       std::cout << "should say 'b plus one': " << b.dump() << "\n";
 
+      // We could do this via a destructor on a wrapper reference class.
+      // But the generated code, if low level, needs to be explicit so
+      // let's not go too crazy.
+      aEngine.popScope();
+      aEngine.popScope();
+
       return Undefined();
     },
     "work",
@@ -86,5 +94,6 @@ int main() {
   std::cout << engine.dump();
   std::cout << "\n";
 
+  engine.popScope();
   return 0;
 }
