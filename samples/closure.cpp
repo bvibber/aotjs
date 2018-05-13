@@ -25,10 +25,10 @@ int main() {
       // the current function ends.
       //
       // Todo make this prettier with arg forwarding?
-      Retained<Scope> _scope1(new Scope(aEngine, aFunc.scope(), 1));
+      auto _closure1 = retained<Scope>(aEngine, aFunc.scope(), 1);
 
       Local a;
-      Val& b = _scope1->local(0);
+      Val& b = _closure1->local(0);
       Local func;
 
       // function declarations/definitions happen at the top of the scope too.
@@ -51,7 +51,7 @@ int main() {
         },
         "func",    // name
         0,         // arg arity
-        _scope1,   // lexical scope
+        _closure1, // lexical scope
         {&b}       // captures
       );
 

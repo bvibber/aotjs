@@ -15,13 +15,14 @@ int main() {
       // Attempting to read beyond the actual number will be invalid.
       // Can skip this call if no references to args.
       //
-      // Note we use a Local here, not a Val&, because the binding is
-      // local to the function body.
-      Local root = frame.arg(0);
+      // Note we use a Val& here, not a Local wrapper, since the arg list
+      // is already held against GC.
+      // If it were captured, though, we'd have to copy it.
+      Val& root = frame.arg(0);
 
       // Local variable definitions are hoisted to the top.
       // They are all initialized to Undefined().
-      // These are a
+      // These are variant wrappers which are also retained while in scope.
       Local obj;
       Local objname;
       Local propname;

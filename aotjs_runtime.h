@@ -623,6 +623,12 @@ namespace AotJS {
 
   };
 
+  template<class T, class... U>
+  Retained<T> retained(U&&... aArgs)
+  {
+    return Retained<T>(new T(aArgs...));
+  }
+
 }
 
 namespace std {
