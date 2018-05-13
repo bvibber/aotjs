@@ -14,14 +14,14 @@ int main() {
   // Beware that temporary variables in function call parameters and such
   // may be GC'd in some cases, so always stick things immediately in here
   // on allocation!
-  auto& scope = engine.pushScope(1);
+  Scope& scope = engine.pushScope(1);
   Val& func = scope[0];
 
   // Register the function!
   func = new Function(
     engine,
     [] (Engine& engine, Function& func, Frame& frame) -> Val {
-      auto scope = engine.pushScope(6);
+      Scope& scope = engine.pushScope(6);
 
       // Fetch the arguments. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.

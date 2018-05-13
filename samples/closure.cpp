@@ -26,8 +26,8 @@ int main() {
       //
       // Todo make this prettier?
       // Todo have a better facility for immutable bindings.
-      auto _locals = aEngine.pushScope(2);
-      auto _closure1 = aEngine.pushScope(1);
+      auto& _locals = aEngine.pushScope(2);
+      auto& _closure1 = aEngine.pushScope(1);
 
       Val& a = _locals[0];
       Val& b = _closure1[0];
