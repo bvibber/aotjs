@@ -63,7 +63,9 @@ namespace AotJS {
   ///
   class Engine {
     Object *mRoot;
-    Scope *mScope;
+    // todo: use linked list?
+    // beware that the Scopes are a linked list in a different dimension already
+    std::vector<Scope*> mScopeStack;
     Frame *mFrame;
 
     // Set of all live objects.
@@ -88,6 +90,7 @@ namespace AotJS {
       return *mRoot;
     }
 
+    Scope& pushScope(Scope& aParent, size_t aSize);
     Scope& pushScope(size_t aSize);
     void popScope();
 
@@ -115,6 +118,12 @@ namespace AotJS {
     :
       mMarked(false)
     {
+      #ifdef FORCE_GC
+      // Force garbage collection to happen on every allocation.
+      // Should shake out some bugs.
+      aEngine.gc();
+      #endif
+
       // We need a set of *all* allocated objects to do sweep.
       // todo: put this in the allocator?
       aEngine.registerForGC(*this);
@@ -131,6 +140,9 @@ namespace AotJS {
     void markForGC() {
       if (!isMarkedForGC()) {
         mMarked = true;
+        #ifdef DEBUG
+        std::cerr << "marking object live " << dump() << "\n";
+        #endif
         markRefsForGC();
       }
     }
@@ -466,6 +478,14 @@ namespace AotJS {
     : GCThing(aEngine),
       mParent(&aParent),
       mLocals(aCount, Undefined())
+    {
+      //
+    }
+
+    Scope(Engine& aEngine, size_t aCount)
+    : GCThing(aEngine),
+      mParent(nullptr),
+      mLocals(aCount,Undefined())
     {
       //
     }

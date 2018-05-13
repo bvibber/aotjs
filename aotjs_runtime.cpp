@@ -293,10 +293,15 @@ namespace AotJS {
 
   #pragma mark Engine
 
-  Engine::Engine() {
+  Engine::Engine()
+  : mRoot(nullptr),
+    mScopeStack(),
+    mObjects(),
+    mFrame(nullptr)
+  {
+    // We must clear those pointers first or else GC might explode
+    // while allocating the root object!
     mRoot = new Object(*this);
-    mScope = nullptr;
-    mFrame = nullptr;
   }
 
   void Engine::registerForGC(GCThing& obj) {
@@ -325,19 +330,19 @@ namespace AotJS {
     }
   }
 
+  Scope& Engine::pushScope(Scope& aParent, size_t aSize)
+  {
+    mScopeStack.push_back(new Scope(*this, aParent, aSize));
+    return *mScopeStack.back();
+  }
+
   Scope& Engine::pushScope(size_t aSize) {
-    auto scope = new Scope(*this, *mScope, aSize);
-    mScope = scope;
-    return *scope;
+    mScopeStack.push_back(new Scope(*this, aSize));
+    return *mScopeStack.back();
   }
 
   void Engine::popScope() {
-    if (mScope) {
-      mScope = &mScope->parent();
-    } else {
-      // should not happen!
-      std::abort();
-    }
+    mScopeStack.pop_back();
   }
 
   Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
@@ -358,13 +363,22 @@ namespace AotJS {
   }
 
   void Engine::gc() {
-    // 1) Mark!
-    mRoot->markForGC();
+    #ifdef DEBUG
+    std::cerr << "starting gc mark/sweep:\n";
+    #endif
 
-    if (mScope) {
-      mScope->markForGC();
+    // 1) Mark!
+    // Mark anything reachable from the global root object.
+    if (mRoot) {
+      mRoot->markForGC();
     }
 
+    // Mark anything on the stack of currently open scopes
+    for (auto scope : mScopeStack) {
+      scope->markForGC();
+    }
+
+    // Todo: merge args/frame stack with scope stack?
     if (mFrame) {
       mFrame->markForGC();
     }
@@ -374,20 +388,21 @@ namespace AotJS {
     // Todo: don't require allocating memory to free memory!
     std::vector<GCThing *> deadObjects;
     for (auto obj : mObjects) {
-      if (!obj->isMarkedForGC()) {
+      if (obj->isMarkedForGC()) {
+        // Keep the object, but reset the marker value for next time.
+        obj->clearForGC();
+      } else {
+        #ifdef DEBUG
+        std::cerr << "removing dead object: " << obj->dump() << "\n";
+        #endif
         deadObjects.push_back(obj);
       }
     }
 
     for (auto obj : deadObjects) {
-      if (obj->isMarkedForGC()) {
-        // Keep the object, but reset the marker value for next time.
-        obj->clearForGC();
-      } else {
-        // No findable references to this object. Destroy it!
-        mObjects.erase(obj);
-        delete obj;
-      }
+      // No findable references to this object. Destroy it!
+      mObjects.erase(obj);
+      delete obj;
     }
   }
 

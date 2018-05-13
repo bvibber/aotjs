@@ -83,5 +83,7 @@ int main() {
   std::cout << engine.dump();
   std::cout << "\n";
 
+  engine.popScope();
+
   return 0;
 }
