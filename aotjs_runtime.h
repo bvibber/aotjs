@@ -142,13 +142,12 @@ namespace AotJS {
     void release() {
       #ifdef DEBUG
       std::cout << "release(" << mRefCount << "--) " << this << " " << dump() << "\n";
-      #endif
-      if (mRefCount) {
-        mRefCount--;
-      } else {
+      if (mRefCount == 0) {
         // should not happen
         std::abort();
       }
+      #endif
+      mRefCount--;
     }
 
     // To be called only by Engine...
