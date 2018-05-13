@@ -205,7 +205,7 @@ namespace AotJS {
   /// * https://github.com/mozilla/gecko-dev/blob/master/js/public/Value.h
   ///
   /// May not be optimal for wasm32 yet.
-  class Val {
+  class alignas(8) Val {
     union {
       uint64_t mRaw;
       int32_t mInt32;
@@ -387,7 +387,7 @@ namespace AotJS {
   /// Using this for local variables keeps them alive in case of GC, since
   /// there's no way to walk the WebAssembly stack to find them.
   ///
-  class Local {
+  class alignas(8) Local {
     Val mVal;
 
   public:
