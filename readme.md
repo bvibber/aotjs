@@ -42,6 +42,8 @@ Big engines
 Smaller interpreters
 * duktape
 * jerryscript
+
+Smaller compilers
 * found a random old project https://github.com/eddid/jslang
 
 # How it might work
