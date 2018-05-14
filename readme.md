@@ -2,7 +2,9 @@ aotjs -- ahead-of-time compilation of JavaScript to LLVM
 
 # Intro
 
-At this stage this is a thought experiment.
+At this stage this is a thought experiment, with a very early proof of concept
+of a garbage-collecting JS-like runtime written in C++, which works when
+compiled to WebAssembly.
 
 ## Intent
 
@@ -18,8 +20,8 @@ Safe, small, moderate-performance JS runtime for application extensions.
 * better performance than an interpreter
 * small, but standard-ish JS language implementation
     * target ES6 or so for starters
-* ability to call to the JS runtime from linked C
-* ability to add JS objects from linked C
+* ability to call to the JS runtime from host
+* ability to add JS objects from host
 
 ## Non-goals
 
@@ -27,11 +29,8 @@ Safe, small, moderate-performance JS runtime for application extensions.
 * no support for loading new code at runtime
 * no support for runtime eval() or new Function("source")
 * no in-process resource limits for memory or execution time
-
-# Prior art
-
-* found a random old project https://github.com/eddid/jslang
-* pretty out of date, but might have cool ideas?
+    * WebAssembly sandbox can apply a hard memory limit
+    * browser will eventually halt super-long loops
 
 ## Things to compare with
 
@@ -43,13 +42,14 @@ Big engines
 Smaller interpreters
 * duktape
 * jerryscript
+* found a random old project https://github.com/eddid/jslang
 
 # How it might work
 
 * direct from LLVM to wasm
     * hello.js -> hello.o -> hello.wasm
-* emit C source code
-    * hello.js -> hello.c -> hello.o -> hello.wasm
+* emit C++ source code
+    * hello.js -> hello.cpp -> hello.o -> hello.wasm
 
 
 # Language considerations
@@ -96,17 +96,23 @@ access the wasm/js stack directly.
 I'm trying my own naive mark-and-sweep GC based on maintaining my own
 stack of scope objects.
 
-Each scope contains a pointer to its parent scope, a vector of JS values
-that were passed in as arguments or allocated for locals, and a vector of
-pointers to JS values captured from outer scopes.
+Each scope contains a pointer to its parent scope (if it has captures),
+a vector of JS values that were allocated for locals.
 
-The actual 'local variables' used in the compiled functions will be pointers,
-allowing them to be modified in-place in the stack frames by closures, which
-should keep the correct behavior.
+The actual 'local variables' used in the compiled functions will be pointers
+(C++ references in the current PoC) allowing them to be modified in-place in
+the stack frames by closures, which should keep the correct behavior.
 
-The marking phase starts with all our roots (global object and the stack)
-TODO: stack!
+The marking phase starts with all our roots (global object, the scope stack,
+and the call frame stack) so any live objects get marked. Then a sweep goes
+through the set of all objects (maintained manually for now, eventually should
+be integrated with the allocator) and deletes any non-reachable objects.
 
+Currently in the PoC, GC is either run manually, or if FORCE_GC is defined
+then on every allocation to force debugging behavior.
+
+The actual objects may do cleanup of their non-GC'd resources from a virtual
+destructor, which gets called by the delete operation in the GC sweep.
 
 ## Closures
 
@@ -129,41 +135,6 @@ Ok there's several classes of variable bindings in JS:
     * have the _Capture_ carry pointers, which can reach arbitrarily high
     * the Capture references the current scope. Or a list of all scopes it uses?
 
-Ok all that seems to work for the stack frames and captures, but it feels ugly.
-What if we rely on the native stack & constructors/destructors to do reference
-counting as a stack keepalive? Then anything that's not kept alive gets GC'd if
-it wasn't found in the object graph...
-
-* Val class implements non-counting behavior, for use in array & prop storage
-  * you would get uncollectable cycles if used ref counting on those
-* Local class wraps it with ref-counting behavior for GCThings, stack use:
-  * non-captured local variables in the function body
-  * argument list in the Frame
-  * captured local variables in the Scope
-  * only locals can be captured in closures
-
-```js
-
-var a = "a";
-
-function foo() {
-  // we actually capture a from global
-  // so we can pass it in to bar's creation
-
-  var b = "b";
-
-  function bar() {
-    // a is captured from global
-    // b is captured from foo
-    a += b;
-  }
-
-  bar();
-}
-foo();
-console.log(a); // "ab"
-
-```
 
 # NaN-boxing
 
@@ -214,4 +185,5 @@ polymorphic code looks something like:
 * [aotjs_runtime.cpp](aotjs_runtime.cpp)
 
 Example hand-compiled programs using it:
+* [samples/gc.cpp](samples/gc.cpp)
 * [samples/closure.js](samples/closure.js) -> [samples/closure.cpp](samples/closure.cpp)
