@@ -189,3 +189,27 @@ polymorphic code looks something like:
 Example hand-compiled programs using it:
 * [samples/gc.cpp](samples/gc.cpp)
 * [samples/closure.js](samples/closure.js) -> [samples/closure.cpp](samples/closure.cpp)
+
+Next steps (runtime):
+* allocate Frames/arguments on stack instead of heap
+* allocate non-captured local vars on stack instead of heap
+* use PropIndex* instead of Val as property keys
+* make sure hash map behaves right in properties
+* put return value in the Frame to keep it alive
+
+Next steps (features):
+* provide string <-> number conversions
+* exercise the Val <-> int and double conversions
+* add operator overloads on Val for arithmetic
+* add arrays and use operator[] for access of both arrays and obj props
+* implement 'console' with at least basic 'log' and 'error' methods
+
+Next steps (exceptions):
+* signal exceptions with an explicit return value (or let emscripten do it?)
+* provide a way to catch exceptions
+* throw exceptions on various conditions
+
+Next steps (compiler):
+* pick a JavaScript-in-JavaScript parser
+* write a JS/node app that takes a parsed AST and translates to C++
+* start building tiny test programs and see what breaks or needs adding
