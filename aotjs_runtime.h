@@ -38,6 +38,7 @@ namespace std {
 }
 
 namespace AotJS {
+  class StackRecord;
   class Local;
 
   template <class T>
@@ -84,7 +85,7 @@ namespace AotJS {
     // Or, in theory we could scan the real stack but may have false values
     // and could run into problems with values optimized into locals which
     // aren't on the emscripten actual stack in wasm!
-    std::vector<Val*> mLocalStack;
+    std::vector<StackRecord> mLocalStack;
 
     // todo move frames into the same stack?
     Frame* mFrame;
@@ -99,12 +100,20 @@ namespace AotJS {
     void popFrame();
 
     friend class Local;
-    void pushLocal(Val *ref);
+    StackRecord* pushLocal(Val ref);
     void popLocal();
 
   public:
+    static const size_t defaultStackSize = 256 * 1024;
+
     // Todo allow specializing the root object at instantiation time?
-    Engine();
+    Engine(size_t aStackSize);
+
+    Engine()
+    : Engine(defaultStackSize)
+    {
+      //
+    }
 
     // ick!
     void setRoot(Object& aRoot) {
@@ -302,9 +311,12 @@ namespace AotJS {
     // fixme how do we genericize these subclasses?
     // it keeps sending me to the bool variant if I don't declare every variation.
     // and can't use static_cast because it thinks they're not inheritence-related yet.
-    Val(Internal* aVal)  : Val(reinterpret_cast<Internal*>(aVal)) {}
-    Val(Object* aVal)    : Val(reinterpret_cast<GCThing*>(aVal)) {}
     */
+    Val(Scope* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
+    Val(Frame* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
+    Val(String* aVal)  : Val(reinterpret_cast<Object*>(aVal)) {}
+    Val(Symbol* aVal)    : Val(reinterpret_cast<Object*>(aVal)) {}
+    Val(Function* aVal)    : Val(reinterpret_cast<Object*>(aVal)) {}
 
 
     Val &operator=(const Val &aVal) {
@@ -446,7 +458,18 @@ namespace AotJS {
     }
   };
 
-  
+  struct StackRecord {
+    Val mVal;
+    Engine* mEngine;
+
+    StackRecord(Engine& engine, Val val)
+    : mVal(val),
+      mEngine(&engine)
+    {
+      //
+    }
+  };
+
   ///
   /// GC-safe wrapper cell for a Val allocated on the stack.
   /// Do NOT store a Local in the heap, it will explode!
@@ -456,17 +479,19 @@ namespace AotJS {
   /// of scope we pop back off the stack in correct order.
   ///
   class Local {
-    // Ideally we would *not* copy this into every instance.
-    // Could switch around who's got a pointer to what, perhaps.
-    Engine* mEngine;
-    Val mVal;
+    // The Local structure is a single pointer word to the value we want
+    // to work with, so it's bit-for-bit the same as a pointer. However
+    // to pacify C++ we need to store the engine pointer someplace, so
+    // we actually point to a stack record struct that dupes the engine
+    // pointer for every stack-local variable. Lame, but keeps everything
+    // else clean.
+    StackRecord *mRecord;
 
   public:
     Local(Engine& aEngine, Val aVal)
-    : mEngine(&aEngine),
-      mVal(aVal)
+    : mRecord(aEngine.pushLocal(aVal))
     {
-      mEngine->pushLocal(&mVal);
+      //
     }
 
     Local(Engine& aEngine)
@@ -476,22 +501,22 @@ namespace AotJS {
     }
 
     ~Local() {
-      mEngine->popLocal();
+      mRecord->mEngine->popLocal();
     }
 
     // Deref ops
     Val& operator*() {
-      return mVal;
+      return mRecord->mVal;
     }
 
     const Val* operator->() const {
-      return &mVal;
+      return &mRecord->mVal;
     }
 
     // Conversion ops
 
     operator Val*() {
-      return &mVal;
+      return &mRecord->mVal;
     }
   };
 

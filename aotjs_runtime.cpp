@@ -288,12 +288,15 @@ namespace AotJS {
 
   #pragma mark Engine
 
-  Engine::Engine()
+  Engine::Engine(size_t aStackSize)
   : mRoot(nullptr),
     mLocalStack(),
     mObjects(),
     mFrame(nullptr)
   {
+    // warning: if stack goes beyond this it will explode
+    mLocalStack.reserve(aStackSize);
+
     // We must clear those pointers first or else GC might explode
     // while allocating the root object!
     mRoot = new Object(*this);
@@ -341,9 +344,10 @@ namespace AotJS {
     return retain<Scope>(new Scope(*this, size));
   }
  
-  void Engine::pushLocal(Val* aValRef)
+  StackRecord* Engine::pushLocal(Val val)
   {
-    mLocalStack.push_back(aValRef);
+    mLocalStack.push_back(StackRecord(*this, val));
+    return &mLocalStack.back();
   }
 
   void Engine::popLocal() {
@@ -379,8 +383,8 @@ namespace AotJS {
     }
 
     // Mark anything on the stack of currently open scopes
-    for (auto val : mLocalStack) {
-      val->markForGC();
+    for (auto& record : mLocalStack) {
+      record.mVal.markForGC();
     }
 
     // Todo: merge args/frame stack with scope stack?
