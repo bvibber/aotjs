@@ -29,12 +29,23 @@ namespace AotJS {
   extern Typeof typeof_object;
 
   class Val;
+}
+
+namespace std {
+  template<> struct hash<::AotJS::Val> {
+    size_t operator()(::AotJS::Val const& ref) const noexcept;
+  };
+}
+
+namespace AotJS {
+  class Local;
+
+  template <class T>
+  class Retained;
 
   class GCThing;
   class Scope;
   class Frame;
-
-  class JSThing;
 
   class PropIndex;
   class String;
@@ -52,6 +63,10 @@ namespace AotJS {
     // just a tag
   };
 
+  class Deleted {
+    // just a tag
+  };
+
   typedef Val (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
 
   ///
@@ -62,11 +77,17 @@ namespace AotJS {
   /// destroyed.
   ///
   class Engine {
+    // Global root object.
     Object *mRoot;
-    // todo: use linked list?
-    // beware that the Scopes are a linked list in a different dimension already
-    std::vector<Scope*> mScopeStack;
-    Frame *mFrame;
+
+    // a stack of pointers to values on the 'real' stack.
+    // Or, in theory we could scan the real stack but may have false values
+    // and could run into problems with values optimized into locals which
+    // aren't on the emscripten actual stack in wasm!
+    std::vector<Val*> mLocalStack;
+
+    // todo move frames into the same stack?
+    Frame* mFrame;
 
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
@@ -77,6 +98,10 @@ namespace AotJS {
     Frame& pushFrame(Function& aFunc, Val aThis, std::vector<Val> aArgs);
     void popFrame();
 
+    friend class Local;
+    void pushLocal(Val *ref);
+    void popLocal();
+
   public:
     // Todo allow specializing the root object at instantiation time?
     Engine();
@@ -86,13 +111,25 @@ namespace AotJS {
       mRoot = &aRoot;
     }
 
-    Object& root() const {
-      return *mRoot;
+    Object* root() const {
+      return mRoot;
     }
 
-    Scope& pushScope(Scope& aParent, size_t aSize);
-    Scope& pushScope(size_t aSize);
-    void popScope();
+    ///
+    /// Allocate a local variable, which will be kept safe from GC until
+    /// the Local instance goes out of scope. Treat it like a Val* and enjoy!
+    ///
+    Local local();
+
+    ///
+    /// Retain a pointer to a given object as a local stack variable, kept safe
+    /// from GC until the Retained<T> instance goes out of scope. Treat it like
+    /// a T* and enjoy!
+    ///
+    template <class T>
+    Retained<T> retain(T* aVal);
+
+    Retained<Scope> scope(size_t size);
 
     Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
 
@@ -157,22 +194,53 @@ namespace AotJS {
     virtual string dump();
   };
 
-  ///
-  /// Represents a GC-able item that can be exposed to JavaScript.
-  ///
-  class JSThing : public GCThing {
+  // Internal classes that should not be exposed to JS
+  class Internal : public GCThing {
   public:
-    JSThing(Engine& aEngine)
-    : GCThing(aEngine)
+    Internal(Engine& engine)
+    : GCThing(engine)
     {
       //
     }
 
-    ~JSThing() override;
+    ~Internal() override;
+  };
 
+  ///
+  /// Represents a regular JavaScript object, with properties and
+  /// a prototype chain. String and Symbol are subclasses.
+  ///
+  /// Todo: throw exceptions on bad prop lookups
+  /// Todo: implement getters, setters, enumeration, etc
+  ///
+  class Object : public GCThing {
+    Object *mPrototype;
+    unordered_map<Val,Val> mProps;
+
+  public:
+    Object(Engine& aEngine)
+    : GCThing(aEngine),
+      mPrototype(nullptr)
+    {
+      //
+    }
+
+    Object(Engine& aEngine, Object& aPrototype)
+    : GCThing(aEngine),
+      mPrototype(&aPrototype)
+    {
+      // Note this doesn't call the constructor,
+      // which would be done by outside code.
+    }
+
+    ~Object() override;
+
+    void markRefsForGC() override;
     string dump() override;
-
     virtual Typeof typeof() const;
+
+    Val getProp(Val name);
+    void setProp(Val name, Val val);
   };
 
   ///
@@ -215,10 +283,10 @@ namespace AotJS {
     // tag-only types
     static const uint64_t tag_null       = 0b1111111111111011'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_undefined  = 0b1111111111111100'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_deleted    = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
     // GC'd pointer types:
-    static const uint64_t tag_min_gc     = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_string     = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_symbol     = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_min_gc     = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_internal   = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_object     = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
 
     Val(const Val &aVal) : mRaw(aVal.raw()) {}
@@ -227,17 +295,16 @@ namespace AotJS {
     Val(bool aVal)       : mRaw(((uint64_t)aVal & ~tag_mask) | tag_bool) {}
     Val(Undefined aVal)  : mRaw(tag_undefined) {}
     Val(Null aVal)       : mRaw(tag_null) {}
-    Val(String* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_string) {}
-    Val(Symbol* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_symbol) {}
+    Val(Deleted aVal)    : mRaw(tag_deleted) {}
+    Val(Internal* aVal)  : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
     Val(Object* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
-    Val(String& aVal)    : Val(&aVal) {}
-    Val(Symbol& aVal)    : Val(&aVal) {}
-    Val(Object& aVal)    : Val(&aVal) {}
+    /*
     // fixme how do we genericize these subclasses?
     // it keeps sending me to the bool variant if I don't declare every variation.
     // and can't use static_cast because it thinks they're not inheritence-related yet.
-    Val(Function* aVal)  : Val(reinterpret_cast<Object *>(aVal)) {}
-    Val(Function& aVal)  : Val(&aVal) {}
+    Val(Internal* aVal)  : Val(reinterpret_cast<Internal*>(aVal)) {}
+    Val(Object* aVal)    : Val(reinterpret_cast<GCThing*>(aVal)) {}
+    */
 
 
     Val &operator=(const Val &aVal) {
@@ -277,27 +344,30 @@ namespace AotJS {
       return tag() == tag_null;
     }
 
-    bool isJSThing() const {
+    bool isGCThing() const {
       // Another clever thing.
       // All pointer types will have at least this value!
       return mRaw >= tag_min_gc;
     }
 
-    bool isString() const {
-      return tag() == tag_string;
-    }
-
-    bool isSymbol() const {
-      return tag() == tag_symbol;
+    bool isInternal() const {
+      return tag() == tag_internal;
     }
 
     bool isObject() const {
       return tag() == tag_object;
     }
 
+    bool isString() const {
+      return isObject() && (asObject().typeof() == typeof_string);
+    }
+
+    bool isSymbol() const {
+      return isObject() && (asObject().typeof() == typeof_symbol);
+    }
+
     bool isFunction() const {
-      // currently no room for a separate function type. not sure about this.
-      return isJSThing() && (asJSThing().typeof() == typeof_function);
+      return isObject() && (asObject().typeof() == typeof_function);
     }
 
     double asDouble() const {
@@ -324,6 +394,10 @@ namespace AotJS {
       return Undefined();
     }
 
+    Deleted asDeleted() const {
+      return Deleted();
+    }
+
     void *asPointer() const {
       #if (PTRDIFF_MAX) > 2147483647
         // 64-bit host -- drop the top 16 bits of NaN and tag.
@@ -337,8 +411,16 @@ namespace AotJS {
       #endif
     }
 
-    JSThing& asJSThing() const {
-      return *static_cast<JSThing *>(asPointer());
+    GCThing& asGCThing() const {
+      return *static_cast<GCThing *>(asPointer());
+    }
+
+    Internal& asInternal() const {
+      return *static_cast<Internal *>(asPointer());
+    }
+
+    Object& asObject() const {
+      return *static_cast<Object *>(asPointer());
     }
 
     String& asString() const {
@@ -349,10 +431,6 @@ namespace AotJS {
       return *static_cast<Symbol *>(asPointer());
     }
 
-    Object& asObject() const {
-      return *static_cast<Object *>(asPointer());
-    }
-
     Function& asFunction() const {
       return *static_cast<Function *>(asPointer());
     }
@@ -360,22 +438,121 @@ namespace AotJS {
     bool operator==(const Val &rhs) const;
 
     string dump() const;
+
+    void markForGC() const {
+      if (isGCThing()) {
+        asGCThing().markForGC();
+      }
+    }
   };
 
-}
+  
+  ///
+  /// GC-safe wrapper cell for a Val allocated on the stack.
+  /// Do NOT store a Local in the heap, it will explode!
+  ///
+  /// The engine keeps a second stack with pointers to these Local cells,
+  /// so while we're in the scope they stay alive during GC. When we go out
+  /// of scope we pop back off the stack in correct order.
+  ///
+  class Local {
+    // Ideally we would *not* copy this into every instance.
+    // Could switch around who's got a pointer to what, perhaps.
+    Engine* mEngine;
+    Val mVal;
 
-namespace std {
-  template<> struct hash<::AotJS::Val> {
-    size_t operator()(::AotJS::Val const& ref) const noexcept;
+  public:
+    Local(Engine& aEngine, Val aVal)
+    : mEngine(&aEngine),
+      mVal(aVal)
+    {
+      mEngine->pushLocal(&mVal);
+    }
+
+    Local(Engine& aEngine)
+    : Local(aEngine, Undefined())
+    {
+      //
+    }
+
+    ~Local() {
+      mEngine->popLocal();
+    }
+
+    // Deref ops
+    Val& operator*() {
+      return mVal;
+    }
+
+    const Val* operator->() const {
+      return &mVal;
+    }
+
+    // Conversion ops
+
+    operator Val*() {
+      return &mVal;
+    }
   };
+
+  template <class T>
+  class Retained {
+    Local mLocal;
+
+  public:
+
+    Retained(Engine& aEngine, T* aVal)
+    : mLocal(aEngine, aVal)
+    {
+      //
+    }
+
+    Retained(Engine& aEngine)
+    : mLocal(aEngine, Undefined())
+    {
+      //
+    }
+
+    T* asPointer() const {
+      if (mLocal->isGCThing()) {
+        // fixme this should be static_cast but it won't let me
+        // since it doesn't think they're related by inheritence
+        return reinterpret_cast<T*>(&(mLocal->asGCThing()));
+      } else {
+        // todo: handle
+        std::abort();
+      }
+    }
+
+    // Deref ops
+
+    T& operator*() const {
+      return *asPointer();
+    }
+
+    T* operator->() const {
+      return asPointer();
+    }
+
+    // Conversion ops
+
+    operator T*() const {
+      return asPointer();
+    }
+
+    operator Val() const {
+      return *mLocal;
+    }
+  };
+
 }
 
 namespace AotJS {
 
-  class PropIndex : public JSThing {
+  class PropIndex : public Object {
   public:
     PropIndex(Engine& aEngine)
-    : JSThing(aEngine) {}
+    : Object(aEngine) {}
 
     ~PropIndex() override;
   };
@@ -429,53 +606,16 @@ namespace AotJS {
   };
 
   ///
-  /// Represents a regular JavaScript object, with properties and
-  /// a prototype chain.
-  ///
-  /// Todo: throw exceptions on bad prop lookups
-  /// Todo: implement getters, setters, enumeration, etc
-  ///
-  class Object : public JSThing {
-    Object *mPrototype;
-    unordered_map<Val,Val> mProps;
-
-  public:
-    Object(Engine& aEngine)
-    : JSThing(aEngine),
-      mPrototype(nullptr)
-    {
-      //
-    }
-
-    Object(Engine& aEngine, Object& aPrototype)
-    : JSThing(aEngine),
-      mPrototype(&aPrototype)
-    {
-      // Note this doesn't call the constructor,
-      // which would be done by outside code.
-    }
-
-    ~Object() override;
-
-    void markRefsForGC() override;
-    string dump() override;
-    Typeof typeof() const override;
-
-    Val getProp(Val name);
-    void setProp(Val name, Val val);
-  };
-
-  ///
   /// Represents a JS lexical capture scope.
   /// Contains local variables, and references the outer scopes.
   ///
-  class Scope : public GCThing {
+  class Scope : public Internal {
     Scope *mParent;
     std::vector<Val> mLocals;
 
   public:
     Scope(Engine& aEngine, Scope& aParent, size_t aCount)
-    : GCThing(aEngine),
+    : Internal(aEngine),
       mParent(&aParent),
       mLocals(aCount, Undefined())
     {
@@ -483,7 +623,7 @@ namespace AotJS {
     }
 
     Scope(Engine& aEngine, size_t aCount)
-    : GCThing(aEngine),
+    : Internal(aEngine),
       mParent(nullptr),
       mLocals(aCount,Undefined())
     {
@@ -492,12 +632,12 @@ namespace AotJS {
 
     ~Scope() override;
 
-    Val& local(size_t aIndex) {
-      return mLocals[aIndex];
+    Val* local(size_t aIndex) {
+      return &mLocals[aIndex];
     }
 
-    Val& operator[](size_t aIndex) {
-      return mLocals[aIndex];
+    Val* operator[](size_t aIndex) {
+      return &mLocals[aIndex];
     }
 
     Scope &parent() const {
@@ -584,8 +724,8 @@ namespace AotJS {
     ///
     /// Return one of the captured variable pointers.
     ///
-    Val& capture(size_t aIndex) {
-      return *mCaptures[aIndex];
+    Val* capture(size_t aIndex) {
+      return mCaptures[aIndex];
     }
 
     void markRefsForGC() override;
@@ -596,7 +736,7 @@ namespace AotJS {
   /// Represents a JS stack frame.
   /// Contains function reference, `this` pointer, and arguments.
   ///
-  class Frame : public GCThing {
+  class Frame : public Internal {
     Frame *mParent;
     Function *mFunc;
     Val mThis;
@@ -609,7 +749,7 @@ namespace AotJS {
       Function& aFunc,
       Val aThis,
       std::vector<Val> aArgs)
-    : GCThing(aEngine),
+    : Internal(aEngine),
       mParent(&aParent),
       mFunc(&aFunc),
       mThis(aThis),
@@ -641,8 +781,8 @@ namespace AotJS {
     /// from the function's arity, even if the actual argument arity
     /// is lower.
     ///
-    Val& arg(size_t index) {
-      return mArgs[index];
+    Val* arg(size_t index) {
+      return &mArgs[index];
     }
 
     ///

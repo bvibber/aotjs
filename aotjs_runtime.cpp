@@ -57,8 +57,8 @@ namespace AotJS {
       buf << "null";
     } else if (isUndefined()) {
       buf << "undefined";
-    } else if (isJSThing()) {
-      buf << asJSThing().dump();
+    } else if (isGCThing()) {
+      buf << asGCThing().dump();
     }
     return buf.str();
   }
@@ -76,25 +76,6 @@ namespace AotJS {
 
   string GCThing::dump() {
     return "GCThing";
-  }
-
-  #pragma mark JSThing
-
-  JSThing::~JSThing() {
-    //
-  }
-
-  Typeof JSThing::typeof() const {
-    return "invalid-jsthing";
-  }
-
-  string JSThing::dump() {
-    return "JSThing";
-  }
-
-  #pragma mark PropIndex
-  PropIndex::~PropIndex() {
-    //
   }
 
   #pragma mark Object
@@ -151,14 +132,8 @@ namespace AotJS {
       auto prop_name(iter.first);
       auto prop_val(iter.second);
 
-      // prop names are always either strings or symbols,
-      // so they are pointers to GCThings.
-      prop_name.asJSThing().markForGC();
-
-      // prop values may not be, so check!
-      if (prop_val.isJSThing()) {
-        prop_val.asJSThing().markForGC();
-      }
+      prop_name.markForGC();
+      prop_val.markForGC();
     }
   }
 
@@ -182,6 +157,11 @@ namespace AotJS {
     }
     buf << "})";
     return buf.str();
+  }
+  
+  #pragma mark PropIndex
+  PropIndex::~PropIndex() {
+    //
   }
 
   #pragma mark String
@@ -221,6 +201,12 @@ namespace AotJS {
     return buf.str();
   }
 
+  #pragma mark Internal
+
+  Internal::~Internal() {
+    //
+  }
+
   #pragma mark Scope
 
   Scope::~Scope() {
@@ -236,9 +222,7 @@ namespace AotJS {
       #ifdef DEBUG
       std::cerr << "-- marking Scope local: " << local.dump() << "\n";
       #endif
-      if (local.isJSThing()) {
-        local.asJSThing().markForGC();
-      }
+      local.markForGC();
     }
   }
 
@@ -271,9 +255,7 @@ namespace AotJS {
 
     mFunc->markForGC();
 
-    if (mThis.isJSThing()) {
-      mThis.asJSThing().markForGC();
-    }
+    mThis.markForGC();
   }
 
   string Frame::dump() {
@@ -308,7 +290,7 @@ namespace AotJS {
 
   Engine::Engine()
   : mRoot(nullptr),
-    mScopeStack(),
+    mLocalStack(),
     mObjects(),
     mFrame(nullptr)
   {
@@ -343,19 +325,29 @@ namespace AotJS {
     }
   }
 
-  Scope& Engine::pushScope(Scope& aParent, size_t aSize)
+  Local Engine::local()
   {
-    mScopeStack.push_back(new Scope(*this, aParent, aSize));
-    return *mScopeStack.back();
+    return Local(*this);
   }
 
-  Scope& Engine::pushScope(size_t aSize) {
-    mScopeStack.push_back(new Scope(*this, aSize));
-    return *mScopeStack.back();
+  template<class T>
+  Retained<T> Engine::retain(T* ptr)
+  {
+    return Retained<T>(*this, ptr);
   }
 
-  void Engine::popScope() {
-    mScopeStack.pop_back();
+  Retained<Scope> Engine::scope(size_t size)
+  {
+    return retain<Scope>(new Scope(*this, size));
+  }
+ 
+  void Engine::pushLocal(Val* aValRef)
+  {
+    mLocalStack.push_back(aValRef);
+  }
+
+  void Engine::popLocal() {
+    mLocalStack.pop_back();
   }
 
   Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
@@ -387,8 +379,8 @@ namespace AotJS {
     }
 
     // Mark anything on the stack of currently open scopes
-    for (auto scope : mScopeStack) {
-      scope->markForGC();
+    for (auto val : mLocalStack) {
+      val->markForGC();
     }
 
     // Todo: merge args/frame stack with scope stack?
