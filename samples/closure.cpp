@@ -12,6 +12,9 @@ int main() {
   // Register the function!
   *work = new Function(
     engine,
+    "work",
+    1, // argument count
+    // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
     [] (Engine& engine, Function& func_, Frame& frame) -> Val {
@@ -35,6 +38,10 @@ int main() {
       // This is where we capture the `b` variable's location, knowing
       // its actual value can change.
       *func = new Function(engine,
+        "func",    // name
+        0,         // arg arity
+        *closure1, // lexical scope
+        {b},       // captures
         // implementation
         [] (Engine& engine, Function& func_, Frame& frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
@@ -48,11 +55,7 @@ int main() {
           *b = new String(engine, "b plus one");
 
           return Undefined();
-        },
-        "func",    // name
-        0,         // arg arity
-        *closure1, // lexical scope
-        {b}        // captures
+        }
       );
 
       // Now we get to the body of the function:
@@ -68,10 +71,7 @@ int main() {
       std::cout << "should say 'b plus one': " << b->dump() << "\n";
 
       return Undefined();
-    },
-    "work",
-    1        // argument count
-    // no closures
+    }
   );
 
   engine.call(*work, Null(), {});

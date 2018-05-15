@@ -19,6 +19,9 @@ int main() {
   // Register the function!
   *func = new Function(
     engine,
+    "work",
+    1, // argument count
+    // no scope capture
     [] (Engine& engine, Function& func, Frame& frame) -> Val {
       // Fetch the arguments. The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
@@ -60,10 +63,7 @@ int main() {
       root->asObject().setProp(*objname, *obj);
 
       return Undefined();
-    },
-    "work",
-    1 // argument count
-    // no scope capture
+    }
   );
 
   engine.call(*func, Null(), {engine.root()});

@@ -570,9 +570,6 @@ namespace AotJS {
     }
   };
 
-}
-
-namespace AotJS {
 
   class PropIndex : public Object {
   public:
@@ -631,8 +628,8 @@ namespace AotJS {
   };
 
   ///
-  /// Represents a JS lexical capture scope.
-  /// Contains local variables, and references the outer scopes.
+  /// Represents a JS lexical scope.
+  /// Contains captured local variables, and references the outer scopes.
   ///
   class Scope : public Internal {
     Scope *mParent;
@@ -687,32 +684,32 @@ namespace AotJS {
   public:
     // For function with no captures
     Function(Engine& aEngine,
-      FunctionBody aBody,
       std::string aName,
-      size_t aArity)
+      size_t aArity,
+      FunctionBody aBody)
     : Object(aEngine), // todo: have a function prototype object!
-      mBody(aBody),
       mName(aName),
       mArity(aArity),
       mScope(nullptr),
-      mCaptures()
+      mCaptures(),
+      mBody(aBody)
     {
       //
     }
 
     // For function with captures
     Function(Engine& aEngine,
-      FunctionBody aBody,
       std::string aName,
       size_t aArity,
       Scope& aScope,
-      std::vector<Val*> aCaptures)
+      std::vector<Val*> aCaptures,
+      FunctionBody aBody)
     : Object(aEngine), // todo: have a function prototype object!
-      mBody(aBody),
       mName(aName),
       mArity(aArity),
       mScope(&aScope),
-      mCaptures(aCaptures)
+      mCaptures(aCaptures),
+      mBody(aBody)
     {
       //
     }
@@ -740,10 +737,10 @@ namespace AotJS {
     }
 
     ///
-    /// The lexical capture scope.
+    /// The parent lexical capture scope.
     ///
-    Scope& scope() const {
-      return *mScope;
+    Scope* scope() const {
+      return mScope;
     }
 
     ///
