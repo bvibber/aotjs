@@ -20,6 +20,7 @@ namespace AotJS {
 
   typedef const char *Typeof;
 
+  extern Typeof typeof_jsthing;
   extern Typeof typeof_undefined;
   extern Typeof typeof_number;
   extern Typeof typeof_boolean;
@@ -216,40 +217,19 @@ namespace AotJS {
   };
 
   ///
-  /// Represents a regular JavaScript object, with properties and
-  /// a prototype chain. String and Symbol are subclasses.
+  /// Child classes are JS-exposed objects, but not necessarily Objects.
   ///
-  /// Todo: throw exceptions on bad prop lookups
-  /// Todo: implement getters, setters, enumeration, etc
-  ///
-  class Object : public GCThing {
-    Object *mPrototype;
-    unordered_map<Val,Val> mProps;
-
+  class JSThing : public GCThing {
   public:
-    Object(Engine& aEngine)
-    : GCThing(aEngine),
-      mPrototype(nullptr)
+    JSThing(Engine& engine)
+    : GCThing(engine)
     {
       //
     }
 
-    Object(Engine& aEngine, Object& aPrototype)
-    : GCThing(aEngine),
-      mPrototype(&aPrototype)
-    {
-      // Note this doesn't call the constructor,
-      // which would be done by outside code.
-    }
+    ~JSThing() override;
 
-    ~Object() override;
-
-    void markRefsForGC() override;
-    string dump() override;
     virtual Typeof typeof() const;
-
-    Val getProp(Val name);
-    void setProp(Val name, Val val);
   };
 
   ///
@@ -296,7 +276,7 @@ namespace AotJS {
     // GC'd pointer types:
     static const uint64_t tag_min_gc     = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_internal   = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_object     = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
+    static const uint64_t tag_jsthing    = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
 
     Val(const Val &aVal) : mRaw(aVal.raw()) {}
     Val(double aVal)     : mDouble(aVal) {}
@@ -306,7 +286,7 @@ namespace AotJS {
     Val(Null aVal)       : mRaw(tag_null) {}
     Val(Deleted aVal)    : mRaw(tag_deleted) {}
     Val(Internal* aVal)  : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
-    Val(Object* aVal)    : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_object) {}
+    Val(JSThing* aVal)   : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
     /*
     // fixme how do we genericize these subclasses?
     // it keeps sending me to the bool variant if I don't declare every variation.
@@ -314,9 +294,10 @@ namespace AotJS {
     */
     Val(Scope* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
     Val(Frame* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
-    Val(String* aVal)  : Val(reinterpret_cast<Object*>(aVal)) {}
-    Val(Symbol* aVal)    : Val(reinterpret_cast<Object*>(aVal)) {}
-    Val(Function* aVal)    : Val(reinterpret_cast<Object*>(aVal)) {}
+    Val(String* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
+    Val(Symbol* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
+    Val(Function* aVal) : Val(reinterpret_cast<JSThing*>(aVal)) {}
+    Val(Object* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
 
 
     Val &operator=(const Val &aVal) {
@@ -366,20 +347,24 @@ namespace AotJS {
       return tag() == tag_internal;
     }
 
+    bool isJSThing() const {
+      return tag() == tag_jsthing;
+    }
+
     bool isObject() const {
-      return tag() == tag_object;
+      return isJSThing() && (asJSThing().typeof() == typeof_object);
     }
 
     bool isString() const {
-      return isObject() && (asObject().typeof() == typeof_string);
+      return isJSThing() && (asJSThing().typeof() == typeof_string);
     }
 
     bool isSymbol() const {
-      return isObject() && (asObject().typeof() == typeof_symbol);
+      return isJSThing() && (asJSThing().typeof() == typeof_symbol);
     }
 
     bool isFunction() const {
-      return isObject() && (asObject().typeof() == typeof_function);
+      return isJSThing() && (asJSThing().typeof() == typeof_function);
     }
 
     double asDouble() const {
@@ -429,6 +414,10 @@ namespace AotJS {
 
     Internal& asInternal() const {
       return *static_cast<Internal *>(asPointer());
+    }
+
+    JSThing& asJSThing() const {
+      return *static_cast<JSThing*>(asPointer());
     }
 
     Object& asObject() const {
@@ -570,11 +559,10 @@ namespace AotJS {
     }
   };
 
-
-  class PropIndex : public Object {
+  class PropIndex : public JSThing {
   public:
     PropIndex(Engine& aEngine)
-    : Object(aEngine) {}
+    : JSThing(aEngine) {}
 
     ~PropIndex() override;
   };
@@ -625,6 +613,43 @@ namespace AotJS {
     const string &getName() const {
       return name;
     }
+  };
+
+  ///
+  /// Represents a regular JavaScript object, with properties and
+  /// a prototype chain. String and Symbol are subclasses.
+  ///
+  /// Todo: throw exceptions on bad prop lookups
+  /// Todo: implement getters, setters, enumeration, etc
+  ///
+  class Object : public JSThing {
+    Object *mPrototype;
+    unordered_map<Val,Val> mProps;
+
+  public:
+    Object(Engine& aEngine)
+    : JSThing(aEngine),
+      mPrototype(nullptr)
+    {
+      //
+    }
+
+    Object(Engine& aEngine, Object& aPrototype)
+    : JSThing(aEngine),
+      mPrototype(&aPrototype)
+    {
+      // Note this doesn't call the constructor,
+      // which would be done by outside code.
+    }
+
+    ~Object() override;
+
+    void markRefsForGC() override;
+    string dump() override;
+    Typeof typeof() const override;
+
+    Val getProp(Val name);
+    void setProp(Val name, Val val);
   };
 
   ///
