@@ -20,7 +20,11 @@ namespace AotJS {
 
 namespace std {
   size_t hash<::AotJS::Val>::operator()(::AotJS::Val const& ref) const noexcept {
-    return hash<uint64_t>{}(ref.raw());
+    if (ref.isString()) {
+      return hash<string>{}(ref.asString());
+    } else {
+      return hash<void*>{}(ref.asPointer());
+    }
   }
 }
 
