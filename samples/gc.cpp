@@ -24,7 +24,7 @@ int main() {
       // Attempting to read beyond the actual number will be invalid.
       //
       // If it were captured by a lamdba, we'd have to copy it into locals below.
-      Capture root = frame.arg(0);
+      Binding root = frame.arg(0);
 
       // JavaScript local variable definitions are hoisted to the top.
       // They are all initialized to Undefined() when allocated on the stack.

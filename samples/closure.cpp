@@ -21,14 +21,16 @@ int main() {
       //
       // We allocate most vars in Locals, which are wrapped pointers into a
       // stack of Vals that are kept alive while. In the case of closure
-      // captures, they're allocated in a GC'd Scope object on the heap.
-      auto closure1 = retain<Scope>(1);
-
+      // captures, they're allocated in a GC'd HeapCell object on the heap,
+      // which itself is kept on the same stack.
+      //
       // JS variable bindings are all pointers, either wrapped with a Local
-      // smart pointer to the stack or straight as a Capture pointer into a
-      // heap Scope.
+      // or HeapCell smart pointer to the stack or straight as a Capture
+      // pointer into one of those.
+      Retained<Cell> _b;
+
       Local a;
-      Capture b = closure1->local(0);
+      Binding b = _b->binding();
       Local func;
 
       // function declarations/definitions happen at the top of the scope too.
@@ -37,8 +39,7 @@ int main() {
       *func = new Function(
         "func",    // name
         0,         // arg arity
-        *closure1, // lexical scope
-        {b},       // captures
+        {_b},     // captures
         // implementation
         [] (Function& func, Frame& frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
@@ -46,7 +47,7 @@ int main() {
           //
           // The capture gives you a reference into one of the linked Scopes,
           // which are retained via a chain referenced by the Function object.
-          Capture b = func.capture(0);
+          Binding b = func.capture(0).binding();
 
           // replace the variable in the parent scope
           *b = new String("b plus one");

@@ -237,38 +237,19 @@ namespace AotJS {
     return typeof_jsthing;
   }
 
-  #pragma mark Scope
+  #pragma mark Cell
 
-  Scope::~Scope() {
+  Cell::~Cell() {
     //
   }
 
-  void Scope::markRefsForGC() {
-    if (mParent) {
-      mParent->markForGC();
-    }
-
-    for (auto local : mLocals) {
-      #ifdef DEBUG
-      std::cerr << "-- marking Scope local: " << local.dump() << "\n";
-      #endif
-      local.markForGC();
-    }
+  void Cell::markRefsForGC() {
+    mVal.markForGC();
   }
 
-  string Scope::dump() {
+  string Cell::dump() {
     std::ostringstream buf;
-    buf << "Scope([";
-    bool first = true;
-    for (auto local : mLocals) {
-      if (first) {
-        first = false;
-      } else {
-        buf << ",";
-      }
-      buf << local.dump();
-    }
-    buf << "])";
+    buf << "Cell(" << mVal.dump() << ")";
     return buf.str();
   }
 
@@ -301,8 +282,8 @@ namespace AotJS {
   }
 
   void Function::markRefsForGC() {
-    if (mScope) {
-      mScope->markForGC();
+    for (auto cell : mCaptures) {
+      cell->val().markForGC();
     }
   }
 

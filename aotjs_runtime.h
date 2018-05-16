@@ -39,14 +39,14 @@ namespace std {
 }
 
 namespace AotJS {
-  typedef Val* Capture;
+  typedef Val* Binding;
   class Local;
 
   template <class T>
   class Retained;
 
   class GCThing;
-  class Scope;
+  class Cell;
   class Frame;
 
   class PropIndex;
@@ -276,7 +276,7 @@ namespace AotJS {
     // it keeps sending me to the bool variant if I don't declare every variation.
     // and can't use static_cast because it thinks they're not inheritence-related yet.
     */
-    Val(Scope* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
+    Val(Cell* aVal)     : Val(reinterpret_cast<Internal*>(aVal)) {}
     Val(Frame* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
     Val(String* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
     Val(Symbol* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
@@ -492,8 +492,9 @@ namespace AotJS {
       //
     }
 
-    Retained()
-    : mLocal(Undefined())
+    template <typename... Args>
+    Retained(Args&&... aArgs)
+    : mLocal(new T(std::forward<Args>(aArgs)...))
     {
       //
     }
@@ -630,42 +631,33 @@ namespace AotJS {
   };
 
   ///
-  /// Represents a JS lexical scope.
-  /// Contains captured local variables, and references the outer scopes.
+  /// Represents a closure-captured JS variable, allocated on the heap in
+  /// this wrapper object.
   ///
-  class Scope : public Internal {
-    Scope *mParent;
-    std::vector<Val> mLocals;
+  class Cell : public Internal {
+    Val mVal;
 
   public:
-    Scope(Scope& aParent, size_t aCount)
-    : Internal(),
-      mParent(&aParent),
-      mLocals(aCount, Undefined())
+    Cell()
+    : mVal(Undefined())
     {
       //
     }
 
-    Scope(size_t aCount)
-    : Internal(),
-      mParent(nullptr),
-      mLocals(aCount,Undefined())
+    Cell(Val aVal)
+    : mVal(aVal)
     {
       //
     }
 
-    ~Scope() override;
+    ~Cell() override;
 
-    Val* local(size_t aIndex) {
-      return &mLocals[aIndex];
+    Binding binding() {
+      return &mVal;
     }
 
-    Val* operator[](size_t aIndex) {
-      return &mLocals[aIndex];
-    }
-
-    Scope &parent() const {
-      return *mParent;
+    Val& val() {
+      return mVal;
     }
 
     void markRefsForGC() override;
@@ -677,11 +669,10 @@ namespace AotJS {
   /// References the
   ///
   class Function : public Object {
-    Scope *mScope;
     FunctionBody mBody;
     std::string mName;
     size_t mArity;
-    std::vector<Val *> mCaptures;
+    std::vector<Cell*> mCaptures;
 
   public:
     // For function with no captures
@@ -692,7 +683,6 @@ namespace AotJS {
     : Object(), // todo: have a function prototype object!
       mName(aName),
       mArity(aArity),
-      mScope(nullptr),
       mCaptures(),
       mBody(aBody)
     {
@@ -703,13 +693,11 @@ namespace AotJS {
     Function(
       std::string aName,
       size_t aArity,
-      Scope& aScope,
-      std::vector<Val*> aCaptures,
+      std::vector<Cell*> aCaptures,
       FunctionBody aBody)
     : Object(), // todo: have a function prototype object!
       mName(aName),
       mArity(aArity),
-      mScope(&aScope),
       mCaptures(aCaptures),
       mBody(aBody)
     {
@@ -734,17 +722,10 @@ namespace AotJS {
     Val call(Val aThis, std::vector<Val> aArgs);
 
     ///
-    /// The parent lexical capture scope.
-    ///
-    Scope* scope() const {
-      return mScope;
-    }
-
-    ///
     /// Return one of the captured variable pointers.
     ///
-    Val* capture(size_t aIndex) {
-      return mCaptures[aIndex];
+    Cell& capture(size_t aIndex) {
+      return *mCaptures[aIndex];
     }
 
     void markRefsForGC() override;
