@@ -29,6 +29,9 @@ namespace std {
 }
 
 namespace AotJS {
+
+  Engine* engine_singleton = new Engine();
+
   bool Val::operator==(const Val &rhs) const {
     // Bit-identical always matches!
     // This catches matching pointers (same object), matching ints, etc.
@@ -65,6 +68,18 @@ namespace AotJS {
       buf << asGCThing().dump();
     }
     return buf.str();
+  }
+
+  Val Val::call(Val aThis, std::vector<Val> aArgs) const
+  {
+    if (isFunction()) {
+      return asFunction().call(aThis, aArgs);
+    } else {
+      #ifdef DEBUG
+      std::cerr << "not a function\n";
+      #endif
+      std::abort();
+    }
   }
 
   #pragma mark GCThing
@@ -253,10 +268,6 @@ namespace AotJS {
   }
 
   void Frame::markRefsForGC() {
-    if (mParent) {
-      mParent->markForGC();
-    }
-
     mFunc->markForGC();
 
     mThis.markForGC();
@@ -284,6 +295,12 @@ namespace AotJS {
     }
   }
 
+
+  Val Function::call(Val aThis, std::vector<Val> aArgs) {
+    Retained<Frame> frame = new Frame(*this, aThis, aArgs);
+    return mBody(*this, *frame);
+  }
+
   string Function::dump() {
     std::ostringstream buf;
     buf << "Function(\"" << name() << "\")";
@@ -295,15 +312,17 @@ namespace AotJS {
   Engine::Engine(size_t aStackSize)
   : mRoot(nullptr),
     mLocalStack(),
-    mObjects(),
-    mFrame(nullptr)
+    mObjects()
   {
+    // horrible singleton cheating
+    engine_singleton = this;
+
     // warning: if stack goes beyond this it will explode
     mLocalStack.reserve(aStackSize);
 
     // We must clear those pointers first or else GC might explode
     // while allocating the root object!
-    mRoot = new Object(*this);
+    mRoot = new Object();
   }
 
   void Engine::registerForGC(GCThing& obj) {
@@ -312,67 +331,15 @@ namespace AotJS {
     // set of all objects in order to do the final sweep.
     mObjects.insert(&obj);
   }
-
-  Frame& Engine::pushFrame(
-    Function& aFunc,
-    Val aThis,
-    std::vector<Val> aArgs)
-  {
-    auto frame = new Frame(*this, *mFrame, aFunc, aThis, aArgs);
-    mFrame = frame;
-    return *frame;
-  }
-
-  void Engine::popFrame() {
-    if (mFrame) {
-      mFrame = &mFrame->parent();
-    } else {
-      // should not happen!
-      std::abort();
-    }
-  }
-
-  Local Engine::local()
-  {
-    return Local(*this);
-  }
-
-  template<class T>
-  Retained<T> Engine::retain(T* ptr)
-  {
-    return Retained<T>(*this, ptr);
-  }
-
-  Retained<Scope> Engine::scope(size_t size)
-  {
-    return retain<Scope>(new Scope(*this, size));
-  }
  
-  StackRecord* Engine::pushLocal(Val val)
+  Val* Engine::pushLocal(Val val)
   {
-    mLocalStack.push_back(StackRecord(*this, val));
+    mLocalStack.push_back(val);
     return &mLocalStack.back();
   }
 
   void Engine::popLocal() {
     mLocalStack.pop_back();
-  }
-
-  Val Engine::call(Val aFunc, Val aThis, std::vector<Val> aArgs) {
-    if (aFunc.isFunction()) {
-      auto func = aFunc.asFunction();
-      auto frame = pushFrame(func, aThis, aArgs);
-      Val retval = func.body()(*this, func, frame);
-      // we know popFrame can't trigger GC
-      popFrame();
-      return retval;
-    } else {
-      // todo do something
-      #ifdef DEBUG
-      std::cerr << "cannot call a non-function\n";
-      #endif
-      std::abort();
-    }
   }
 
   void Engine::gc() {
@@ -388,12 +355,7 @@ namespace AotJS {
 
     // Mark anything on the stack of currently open scopes
     for (auto& record : mLocalStack) {
-      record.mVal.markForGC();
-    }
-
-    // Todo: merge args/frame stack with scope stack?
-    if (mFrame) {
-      mFrame->markForGC();
+      record.markForGC();
     }
 
     // 2) Sweep!

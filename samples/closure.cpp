@@ -5,19 +5,16 @@
 using namespace AotJS;
 
 int main() {
-  AotJS::Engine engine;
-
-  auto work = engine.local();
+  Local work;
 
   // Register the function!
   *work = new Function(
-    engine,
     "work",
     1, // argument count
     // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Engine& engine, Function& func_, Frame& frame) -> Val {
+    [] (Function& func_, Frame& frame) -> Val {
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
@@ -28,44 +25,44 @@ int main() {
       //
       // Todo make this prettier?
       // Todo have a better facility for immutable bindings.
-      auto closure1 = engine.scope(1);
+      auto closure1 = retain<Scope>(1);
 
-      auto a = engine.local();
-      auto b = closure1->local(0);
-      auto func = engine.local();
+      Local a;
+      Capture b = closure1->local(0);
+      Local func;
 
       // function declarations/definitions happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
       // its actual value can change.
-      *func = new Function(engine,
+      *func = new Function(
         "func",    // name
         0,         // arg arity
         *closure1, // lexical scope
         {b},       // captures
         // implementation
-        [] (Engine& engine, Function& func_, Frame& frame) -> Val {
+        [] (Function& func, Frame& frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //
           // The capture gives you a reference into one of the linked Scopes,
           // which are retained via a chain referenced by the Function object.
-          auto b = func_.capture(0);
+          Capture b = func.capture(0);
 
           // replace the variable in the parent scope
-          *b = new String(engine, "b plus one");
+          *b = new String("b plus one");
 
           return Undefined();
         }
       );
 
       // Now we get to the body of the function:
-      *a = new String(engine, "a");
-      *b = new String(engine, "b");
+      *a = new String("a");
+      *b = new String("b");
 
       std::cout << "should say 'b': " << b->dump() << "\n";
 
       // Make the call!
-      engine.call(*func, Null(), {});
+      func->call(Null(), {});
 
       // should say "b plus one"
       std::cout << "should say 'b plus one': " << b->dump() << "\n";
@@ -74,16 +71,16 @@ int main() {
     }
   );
 
-  engine.call(*work, Null(), {});
+  work->call(Null(), {});
 
   std::cout << "before gc\n";
-  std::cout << engine.dump();
+  std::cout << engine().dump();
   std::cout << "\n\n";
 
-  engine.gc();
+  engine().gc();
 
   std::cout << "after gc\n";
-  std::cout << engine.dump();
+  std::cout << engine().dump();
   std::cout << "\n";
 
   return 0;

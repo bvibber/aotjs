@@ -38,7 +38,7 @@ namespace std {
 }
 
 namespace AotJS {
-  class StackRecord;
+  typedef Val* Capture;
   class Local;
 
   template <class T>
@@ -68,7 +68,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Val (*FunctionBody)(Engine& engine, Function& func, Frame& frame);
+  typedef Val (*FunctionBody)(Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -85,10 +85,7 @@ namespace AotJS {
     // Or, in theory we could scan the real stack but may have false values
     // and could run into problems with values optimized into locals which
     // aren't on the emscripten actual stack in wasm!
-    std::vector<StackRecord> mLocalStack;
-
-    // todo move frames into the same stack?
-    Frame* mFrame;
+    std::vector<Val> mLocalStack;
 
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
@@ -96,11 +93,8 @@ namespace AotJS {
     void registerForGC(GCThing& aObj);
     friend class GCThing;
 
-    Frame& pushFrame(Function& aFunc, Val aThis, std::vector<Val> aArgs);
-    void popFrame();
-
     friend class Local;
-    StackRecord* pushLocal(Val ref);
+    Val* pushLocal(Val ref);
     void popLocal();
 
   public:
@@ -124,27 +118,17 @@ namespace AotJS {
       return mRoot;
     }
 
-    ///
-    /// Allocate a local variable, which will be kept safe from GC until
-    /// the Local instance goes out of scope. Treat it like a Val* and enjoy!
-    ///
-    Local local();
-
-    ///
-    /// Retain a pointer to a given object as a local stack variable, kept safe
-    /// from GC until the Retained<T> instance goes out of scope. Treat it like
-    /// a T* and enjoy!
-    ///
-    template <class T>
-    Retained<T> retain(T* aVal);
-
-    Retained<Scope> scope(size_t size);
-
-    Val call(Val aFunc, Val aThis, std::vector<Val> aArgs);
-
     void gc();
     string dump();
   };
+
+  // Singleton
+  extern Engine* engine_singleton;
+
+  // Singleton access
+  static inline Engine& engine() {
+    return *engine_singleton;
+  }
 
   ///
   /// Base class for an item that can be garbage-collected and may
@@ -160,19 +144,19 @@ namespace AotJS {
     bool mMarked;
 
   public:
-    GCThing(Engine& aEngine)
+    GCThing()
     :
       mMarked(false)
     {
       #ifdef FORCE_GC
       // Force garbage collection to happen on every allocation.
       // Should shake out some bugs.
-      aEngine.gc();
+      engine().gc();
       #endif
 
       // We need a set of *all* allocated objects to do sweep.
       // todo: put this in the allocator?
-      aEngine.registerForGC(*this);
+      engine().registerForGC(*this);
     }
 
     virtual ~GCThing();
@@ -206,8 +190,8 @@ namespace AotJS {
   // Internal classes that should not be exposed to JS
   class Internal : public GCThing {
   public:
-    Internal(Engine& engine)
-    : GCThing(engine)
+    Internal()
+    : GCThing()
     {
       //
     }
@@ -227,16 +211,14 @@ namespace AotJS {
     unordered_map<Val,Val> mProps;
 
   public:
-    Object(Engine& aEngine)
-    : GCThing(aEngine),
-      mPrototype(nullptr)
+    Object()
+    : mPrototype(nullptr)
     {
       //
     }
 
-    Object(Engine& aEngine, Object& aPrototype)
-    : GCThing(aEngine),
-      mPrototype(&aPrototype)
+    Object(Object& aPrototype)
+    : mPrototype(&aPrototype)
     {
       // Note this doesn't call the constructor,
       // which would be done by outside code.
@@ -456,67 +438,54 @@ namespace AotJS {
         asGCThing().markForGC();
       }
     }
-  };
 
-  struct StackRecord {
-    Val mVal;
-    Engine* mEngine;
+    Val call(Val aThis, std::vector<Val> aArgs) const;
 
-    StackRecord(Engine& engine, Val val)
-    : mVal(val),
-      mEngine(&engine)
-    {
-      //
-    }
   };
 
   ///
   /// GC-safe wrapper cell for a Val allocated on the stack.
   /// Do NOT store a Local in the heap, it will explode!
   ///
-  /// The engine keeps a second stack with pointers to these Local cells,
+  /// The engine keeps a second stack with the actual Val cells,
   /// so while we're in the scope they stay alive during GC. When we go out
   /// of scope we pop back off the stack in correct order.
   ///
   class Local {
     // The Local structure is a single pointer word to the value we want
-    // to work with, so it's bit-for-bit the same as a pointer. However
-    // to pacify C++ we need to store the engine pointer someplace, so
-    // we actually point to a stack record struct that dupes the engine
-    // pointer for every stack-local variable. Lame, but keeps everything
-    // else clean.
-    StackRecord *mRecord;
+    // to work with.
+    Val* mRecord;
 
   public:
-    Local(Engine& aEngine, Val aVal)
-    : mRecord(aEngine.pushLocal(aVal))
+    Local(Val aVal)
+    : mRecord(engine().pushLocal(aVal))
     {
       //
     }
 
-    Local(Engine& aEngine)
-    : Local(aEngine, Undefined())
+    Local()
+    : Local(Undefined())
     {
       //
     }
 
     ~Local() {
-      mRecord->mEngine->popLocal();
+      engine().popLocal();
     }
 
     // Deref ops
     Val& operator*() {
-      return mRecord->mVal;
+      return *mRecord;
     }
 
     const Val* operator->() const {
-      return &mRecord->mVal;
+      return mRecord;
     }
 
     // Conversion ops
 
     operator Val*() {
-      return &mRecord->mVal;
+      return mRecord;
     }
   };
 
@@ -526,14 +495,14 @@ namespace AotJS {
 
   public:
 
-    Retained(Engine& aEngine, T* aVal)
-    : mLocal(aEngine, aVal)
+    Retained(T* aVal)
+    : mLocal(aVal)
     {
       //
     }
 
-    Retained(Engine& aEngine)
-    : mLocal(aEngine, Undefined())
+    Retained()
+    : mLocal(Undefined())
     {
       //
     }
@@ -570,11 +539,16 @@ namespace AotJS {
     }
   };
 
+  template <class T, typename... Args>
+  inline Retained<T> retain(Args&&... aArgs)
+  {
+    return new T(std::forward<Args>(aArgs)...);
+  }
 
   class PropIndex : public Object {
   public:
-    PropIndex(Engine& aEngine)
-    : Object(aEngine) {}
+    PropIndex()
+    : Object() {}
 
     ~PropIndex() override;
   };
@@ -583,8 +557,8 @@ namespace AotJS {
     string data;
 
   public:
-    String(Engine& aEngine, string const &aStr)
-    : PropIndex(aEngine),
+    String(string const &aStr)
+    : PropIndex(),
       data(aStr)
     {
       //
@@ -609,8 +583,8 @@ namespace AotJS {
     string name;
 
   public:
-    Symbol(Engine& aEngine, string const &aName)
-    : PropIndex(aEngine),
+    Symbol(string const &aName)
+    : PropIndex(),
       name(aName)
     {
       //
@@ -636,16 +610,16 @@ namespace AotJS {
     std::vector<Val> mLocals;
 
   public:
-    Scope(Engine& aEngine, Scope& aParent, size_t aCount)
-    : Internal(aEngine),
+    Scope(Scope& aParent, size_t aCount)
+    : Internal(),
       mParent(&aParent),
       mLocals(aCount, Undefined())
     {
       //
     }
 
-    Scope(Engine& aEngine, size_t aCount)
-    : Internal(aEngine),
+    Scope(size_t aCount)
+    : Internal(),
       mParent(nullptr),
       mLocals(aCount,Undefined())
     {
@@ -683,11 +657,11 @@ namespace AotJS {
 
   public:
     // For function with no captures
-    Function(Engine& aEngine,
+    Function(
       std::string aName,
       size_t aArity,
       FunctionBody aBody)
-    : Object(aEngine), // todo: have a function prototype object!
+    : Object(), // todo: have a function prototype object!
       mName(aName),
       mArity(aArity),
       mScope(nullptr),
@@ -698,13 +672,13 @@ namespace AotJS {
     }
 
     // For function with captures
-    Function(Engine& aEngine,
+    Function(
       std::string aName,
       size_t aArity,
       Scope& aScope,
       std::vector<Val*> aCaptures,
       FunctionBody aBody)
-    : Object(aEngine), // todo: have a function prototype object!
+    : Object(), // todo: have a function prototype object!
       mName(aName),
       mArity(aArity),
       mScope(&aScope),
@@ -729,12 +703,7 @@ namespace AotJS {
       return mArity;
     }
 
-    ///
-    /// The actual function pointer.
-    ///
-    FunctionBody body() const {
-      return mBody;
-    }
+    Val call(Val aThis, std::vector<Val> aArgs);
 
     ///
     /// The parent lexical capture scope.
@@ -759,20 +728,17 @@ namespace AotJS {
   /// Contains function reference, `this` pointer, and arguments.
   ///
   class Frame : public Internal {
-    Frame *mParent;
     Function *mFunc;
     Val mThis;
     size_t mArity;
     std::vector<Val> mArgs;
 
   public:
-    Frame(Engine& aEngine,
-      Frame& aParent,
+    Frame(
       Function& aFunc,
       Val aThis,
       std::vector<Val> aArgs)
-    : Internal(aEngine),
-      mParent(&aParent),
+    : Internal(),
       mFunc(&aFunc),
       mThis(aThis),
       mArity(aArgs.size()),
@@ -787,10 +753,6 @@ namespace AotJS {
     }
 
     ~Frame() override;
-
-    Frame& parent() const {
-      return *mParent;
-    }
 
     Function& func() const {
       return *mFunc;
