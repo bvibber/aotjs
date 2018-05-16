@@ -17,7 +17,7 @@ int main() {
     "work",
     1, // argument count
     // no scope capture
-    [] (Function& func, Frame& frame) -> Val {
+    [] (Function& func, Frame& frame) -> Local {
       // Fetch the arguments into local Capture (Val*) refs, which can be
       // either read/modified or passed on to a
       // The function arity must be correct!
@@ -56,7 +56,7 @@ int main() {
 
       root->asObject().setProp(*objname, *obj);
 
-      return Undefined();
+      return Local(Undefined());
     }
   );
 

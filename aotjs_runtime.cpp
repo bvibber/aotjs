@@ -49,9 +49,10 @@ namespace AotJS {
     return false;
   }
 
-  Local Val::operator+(const Local& rhs) const {
-    if (isObject()) {
-      return asObject() + rhs;
+  Local Val::operator+(const Val& rhs) const {
+    // todo implement this correctly
+    if (isString() || rhs.isString()) {
+      return Local(*toString() + *rhs.toString());
     } else {
       return Local(toDouble() + rhs.toDouble());
     }
@@ -95,7 +96,7 @@ namespace AotJS {
     }
   }
 
-  double Val::toDouble() const;
+  double Val::toDouble() const
   {
     if (isDouble()) {
       return asDouble();
@@ -116,10 +117,10 @@ namespace AotJS {
   Retained<String> Val::toString() const
   {
     if (isJSThing()) {
-      return asJSThing.toString();
+      return asJSThing().toString();
     } else {
       // todo: flip this?
-      return dump();
+      return retain<String>(dump());
     }
   }
 
@@ -145,7 +146,7 @@ namespace AotJS {
     return buf.str();
   }
 
-  Val Val::call(Val aThis, std::vector<Val> aArgs) const
+  Local Val::call(Val aThis, std::vector<Val> aArgs) const
   {
     if (isFunction()) {
       return asFunction().call(aThis, aArgs);
@@ -315,10 +316,6 @@ namespace AotJS {
     return retain<String>("[jsthing JSThing]");
   }
 
-  Local JSThing::operator+(const Local& rhs) const {
-    return Local(NAN);
-  }
-
   #pragma mark Cell
 
   Cell::~Cell() {
@@ -370,8 +367,8 @@ namespace AotJS {
   }
 
 
-  Val Function::call(Val aThis, std::vector<Val> aArgs) {
-    Retained<Frame> frame = new Frame(*this, aThis, aArgs);
+  Local Function::call(Val aThis, std::vector<Val> aArgs) {
+    auto frame = retain<Frame>(*this, aThis, aArgs);
     return mBody(*this, *frame);
   }
 

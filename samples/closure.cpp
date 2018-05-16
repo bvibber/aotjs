@@ -14,7 +14,7 @@ int main() {
     // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Function& func_, Frame& frame) -> Val {
+    [] (Function& func_, Frame& frame) -> Local {
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
@@ -27,7 +27,7 @@ int main() {
       // JS variable bindings are all pointers, either wrapped with a Local
       // or Retained<T> smart pointer to the stack or straight as a Binding
       // pointer into one of those.
-      Retained<Cell> _b;
+      auto _b = retain<Cell>();
 
       Local a;
       Binding b = _b->binding();
@@ -41,7 +41,7 @@ int main() {
         0,         // arg arity
         {_b},      // captures
         // implementation
-        [] (Function& func, Frame& frame) -> Val {
+        [] (Function& func, Frame& frame) -> Local {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //
@@ -52,7 +52,7 @@ int main() {
           // replace the variable in the parent scope
           *b = new String("b plus one");
 
-          return Undefined();
+          return Local(Undefined());
         }
       );
 
@@ -68,7 +68,7 @@ int main() {
       // should say "b plus one"
       std::cout << "should say 'b plus one': " << b->dump() << "\n";
 
-      return Undefined();
+      return Local(Undefined());
     }
   );
 

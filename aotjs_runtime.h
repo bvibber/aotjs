@@ -215,8 +215,7 @@ namespace AotJS {
 
     virtual Typeof typeof() const;
 
-    Retained<String> toString() const virtual;
-    Local operator+(const Local& rhs) const virtual;
+    virtual Retained<String> toString() const;
   };
 
   ///
@@ -439,7 +438,7 @@ namespace AotJS {
 
     bool operator==(const Val& rhs) const;
 
-    Local operator+(const Local& rhs) const;
+    Local operator+(const Val& rhs) const;
 
     string dump() const;
 
@@ -449,7 +448,7 @@ namespace AotJS {
       }
     }
 
-    Val call(Val aThis, std::vector<Val> aArgs) const;
+    Local call(Val aThis, std::vector<Val> aArgs) const;
 
   };
 
@@ -505,17 +504,10 @@ namespace AotJS {
 
   public:
 
-    Retained(T* aVal)
-    : mLocal(aVal)
+    Retained(const T* aLocal)
+    : mLocal(aLocal)
     {
-      //
-    }
-
-    template <typename... Args>
-    Retained(Args&&... aArgs)
-    : mLocal(new T(std::forward<Args>(aArgs)...))
-    {
-      //
+      // Initialize with a pointer
     }
 
     T* asPointer() const {
@@ -527,6 +519,12 @@ namespace AotJS {
         // todo: handle
         std::abort();
       }
+    }
+
+    Retained(const Retained<T>& aOther)
+    : Retained(aOther.asPointer())
+    {
+      // Initialize with another Retained<T>
     }
 
     // Deref ops
@@ -553,7 +551,7 @@ namespace AotJS {
   template <class T, typename... Args>
   inline Retained<T> retain(Args&&... aArgs)
   {
-    return new T(std::forward<Args>(aArgs)...);
+    return Retained<T>(new T(std::forward<Args>(aArgs)...));
   }
 
   class PropIndex : public JSThing {
@@ -589,12 +587,16 @@ namespace AotJS {
       return data;
     }
 
+    Retained<String> toString() const override {
+      return Retained<String>(this);
+    }
+
     bool operator==(const String &rhs) const {
       return data == rhs.data;
     }
 
-    Local operator+(const Local &rhs) const override {
-      return retain<String>(data + rhs->toString()->data);
+    Retained<String> operator+(const String &rhs) const {
+      return retain<String>(data + rhs.data);
     }
   };
 
@@ -614,6 +616,10 @@ namespace AotJS {
     Typeof typeof() const override;
 
     string dump() override;
+
+    Retained<String> toString() const override {
+      return retain<String>("Symbol(" + getName() + ")");
+    }
 
     const string &getName() const {
       return name;
@@ -652,6 +658,11 @@ namespace AotJS {
     void markRefsForGC() override;
     string dump() override;
     Typeof typeof() const override;
+
+    Retained<String> toString() const override {
+      // todo get the constructor name
+      return retain<String>("[object Object]");
+    }
 
     Val getProp(Val name);
     void setProp(Val name, Val val);
@@ -746,7 +757,7 @@ namespace AotJS {
       return mArity;
     }
 
-    Val call(Val aThis, std::vector<Val> aArgs);
+    Local call(Val aThis, std::vector<Val> aArgs);
 
     ///
     /// Return one of the captured variable pointers.
@@ -757,6 +768,11 @@ namespace AotJS {
 
     void markRefsForGC() override;
     string dump() override;
+
+    Retained<String> toString() const override {
+      return retain<String>("[Function: " + name() + "]");
+    }
+
   };
 
   ///
