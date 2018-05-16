@@ -14,7 +14,9 @@ int main() {
     // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Function& func_, Frame& frame) -> Local {
+    [] (Function& func_, Frame& frame) -> RetVal {
+      Scope scope;
+
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
@@ -41,7 +43,10 @@ int main() {
         0,         // arg arity
         {_b},      // captures
         // implementation
-        [] (Function& func, Frame& frame) -> Local {
+        [] (Function& func, Frame& frame) -> RetVal {
+          // Allocate local scope for the return value.
+          Scope scope;
+
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //
@@ -52,7 +57,7 @@ int main() {
           // replace the variable in the parent scope
           *b = new String("b plus one");
 
-          return Local(Undefined());
+          return scope.escape(Undefined());
         }
       );
 
@@ -68,7 +73,7 @@ int main() {
       // should say "b plus one"
       std::cout << "should say 'b plus one': " << b->dump() << "\n";
 
-      return Local(Undefined());
+      return scope.escape(Undefined());
     }
   );
 

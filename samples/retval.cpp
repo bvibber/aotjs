@@ -6,6 +6,7 @@ using namespace AotJS;
 
 int main() {
   // Variables hoisted...
+  Scope scope;
   Local work;
   Local play;
   Local retval;
@@ -14,16 +15,18 @@ int main() {
     "work",
     0, // argument count
     // no scope capture
-    [] (Function& func, Frame& frame) -> Local {
-      return Local(new String("work"));
+    [] (Function& func, Frame& frame) -> RetVal {
+      Scope scope;
+      return scope.escape(new String("work"));
     }
   );
 
   *play = new Function(
     "play",
     0, // argument count
-    [] (Function& func, Frame& frame) -> Local {
-      return Local(new String("play"));
+    [] (Function& func, Frame& frame) -> RetVal {
+      Scope scope;
+      return scope.escape(new String("play"));
     }
   );
 

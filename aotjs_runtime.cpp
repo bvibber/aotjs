@@ -49,12 +49,13 @@ namespace AotJS {
     return false;
   }
 
-  Local Val::operator+(const Val& rhs) const {
+  RetVal Val::operator+(const Val& rhs) const {
+    Scope scope;
     // todo implement this correctly
     if (isString() || rhs.isString()) {
-      return Local(*toString() + *rhs.toString());
+      return scope.escape(*toString() + *rhs.toString());
     } else {
-      return Local(toDouble() + rhs.toDouble());
+      return scope.escape(toDouble() + rhs.toDouble());
     }
   }
 
@@ -114,13 +115,14 @@ namespace AotJS {
     }
   }
 
-  Retained<String> Val::toString() const
+  Ret<String> Val::toString() const
   {
+    ScopeWith<String> scope;
     if (isJSThing()) {
-      return asJSThing().toString();
+      return scope.escape(asJSThing().toString());
     } else {
       // todo: flip this?
-      return retain<String>(dump());
+      return scope.escape(new String(dump()));
     }
   }
 
@@ -146,10 +148,11 @@ namespace AotJS {
     return buf.str();
   }
 
-  Local Val::call(Val aThis, std::vector<Val> aArgs) const
+  RetVal Val::call(Val aThis, std::vector<Val> aArgs) const
   {
+    Scope scope;
     if (isFunction()) {
-      return asFunction().call(aThis, aArgs);
+      return scope.escape(*asFunction().call(aThis, aArgs));
     } else {
       #ifdef DEBUG
       std::cerr << "not a function\n";
@@ -183,43 +186,42 @@ namespace AotJS {
     return typeof_object;
   }
 
-  static Val normalizePropName(Val aName) {
+  static RetVal normalizePropName(Val aName) {
+    Scope scope;
     if (aName.isString()) {
-      return aName;
+      return scope.escape(aName);
     } else if (aName.isSymbol()) {
-      return aName;
+      return scope.escape(aName);
     } else {
       // todo: convert to string
-      // hrm, we need a ref to an engine for that?
       #ifdef DEBUG
       std::cerr << "cannot use non-string/symbol as property index";
       #endif
       std::abort();
-      return Undefined();
+      return scope.escape(Undefined());
     }
   }
 
   // todo: handle numeric indices
   // todo: getters
-  Val Object::getProp(Val aName) {
-    // fixme retain this properly with a scope
-    Val name = normalizePropName(aName);
-    auto index = mProps.find(name);
+  RetVal Object::getProp(Val aName) {
+    Scope scope;
+    Local name = *normalizePropName(aName);
+    auto index = mProps.find(*name);
     if (index == mProps.end()) {
       if (mPrototype) {
-        return mPrototype->getProp(name);
+        return mPrototype->getProp(*name);
       } else {
-        return Undefined();
+        return scope.escape(Undefined());
       }
     } else {
-      return index->first;
+      return scope.escape(index->first);
     }
   }
 
   void Object::setProp(Val aName, Val aVal) {
-    // fixme retain this properly with a scope
-    auto name = normalizePropName(aName);
-    mProps.emplace(name, aVal);
+    Local name = *normalizePropName(aName);
+    mProps.emplace(*name, aVal);
   }
 
   void Object::markRefsForGC() {
@@ -312,8 +314,9 @@ namespace AotJS {
     return typeof_jsthing;
   }
 
-  Retained<String> JSThing::toString() const {
-    return retain<String>("[jsthing JSThing]");
+  Ret<String> JSThing::toString() const {
+    ScopeWith<String> scope;
+    return scope.escape(new String("[jsthing JSThing]"));
   }
 
   #pragma mark Cell
@@ -367,9 +370,10 @@ namespace AotJS {
   }
 
 
-  Local Function::call(Val aThis, std::vector<Val> aArgs) {
+  RetVal Function::call(Val aThis, std::vector<Val> aArgs) {
+    Scope scope;
     auto frame = retain<Frame>(*this, aThis, aArgs);
-    return mBody(*this, *frame);
+    return scope.escape(*mBody(*this, *frame));
   }
 
   string Function::dump() {
@@ -409,7 +413,17 @@ namespace AotJS {
     return &mLocalStack.back();
   }
 
-  void Engine::popLocal() {
+  void Engine::popLocal(Val* expectedTop) {
+    #ifdef DEBUG
+    if (expectedTop != &mLocalStack.back()) {
+      std::cerr << "bad stack pointer: "
+        << &mLocalStack.back()
+        << ", expected "
+        << expectedTop
+        << "\n";
+      std::abort();
+    }
+    #endif
     mLocalStack.pop_back();
   }
 

@@ -17,7 +17,11 @@ int main() {
     "work",
     1, // argument count
     // no scope capture
-    [] (Function& func, Frame& frame) -> Local {
+    [] (Function& func, Frame& frame) -> RetVal {
+      // Functions which can return a value must allocate stack space for the
+      // retval, Or Else.
+      Scope scope;
+
       // Fetch the arguments into local Capture (Val*) refs, which can be
       // either read/modified or passed on to a
       // The function arity must be correct!
@@ -56,7 +60,7 @@ int main() {
 
       root->asObject().setProp(*objname, *obj);
 
-      return Local(Undefined());
+      return scope.escape(Undefined());
     }
   );
 

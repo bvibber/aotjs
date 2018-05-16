@@ -40,10 +40,15 @@ namespace std {
 
 namespace AotJS {
   typedef Val* Binding;
-  class Local;
 
-  template <class T>
-  class Retained;
+  class Engine;
+
+  class Local;
+  template <class T> class Retained;
+
+  class Scope;
+  class RetVal;
+  template <class T> class Ret;
 
   class GCThing;
   class Cell;
@@ -54,7 +59,6 @@ namespace AotJS {
   class Symbol;
 
   class Object;
-  class Engine;
   class Function;
 
   class Undefined {
@@ -69,7 +73,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Local (*FunctionBody)(Function& func, Frame& frame);
+  typedef RetVal (*FunctionBody)(Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -88,6 +92,12 @@ namespace AotJS {
     // aren't on the emscripten actual stack in wasm!
     std::vector<Val> mLocalStack;
 
+    // We also keep a stack of pointes into the locals stack, which represent
+    // pre-allocated return values for functions which return RetVal or Ret<T>.
+    // Each Scope object allocates a ret val on the locals stac on construction,
+    // and the RetVal de-allocates it on destruction in the parent function.
+    std::vector<Val*> mScopeStack;
+
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
     unordered_set<GCThing *> mObjects;
@@ -95,8 +105,16 @@ namespace AotJS {
     friend class GCThing;
 
     friend class Local;
+    friend class Scope;
+    friend class RetVal;
+    template <class T> friend class ScopeWith;
+    template <class T> friend class Ret;
     Val* pushLocal(Val ref);
-    void popLocal();
+    void popLocal(Val* mRecord);
+
+    void pushScope(Val *aValPtr);
+    void popScope();
+    Val* currentRetVal();
 
   public:
     static const size_t defaultStackSize = 256 * 1024;
@@ -215,7 +233,7 @@ namespace AotJS {
 
     virtual Typeof typeof() const;
 
-    virtual Retained<String> toString() const;
+    virtual Ret<String> toString() const;
   };
 
   ///
@@ -414,21 +432,22 @@ namespace AotJS {
       return *static_cast<Function *>(asPointer());
     }
 
-    // Unchecked conversions returning a Retained<T>
+    // Unchecked conversions returning a *T, castable to Retained<T>
+    // or Ret<T>.
     template <class T>
-    Retained<T> as() const {
-      return new Retained<T>(static_cast<T*>(asPointer()));
+    T* as() const {
+      return static_cast<T*>(asPointer());
     }
 
     // Checked conversions
     bool toBool() const;
     int32_t toInt32() const;
     double toDouble() const;
-    Retained<String> toString() const;
+    Ret<String> toString() const;
 
     bool operator==(const Val& rhs) const;
 
-    Local operator+(const Val& rhs) const;
+    RetVal operator+(const Val& rhs) const;
 
     string dump() const;
 
@@ -438,40 +457,22 @@ namespace AotJS {
       }
     }
 
-    Local call(Val aThis, std::vector<Val> aArgs) const;
+    RetVal call(Val aThis, std::vector<Val> aArgs) const;
 
   };
 
-  ///
-  /// GC-safe wrapper cell for a Val allocated on the stack.
-  /// Do NOT store a Local in the heap, it will explode!
-  ///
-  /// The engine keeps a second stack with the actual Val cells,
-  /// so while we're in the scope they stay alive during GC. When we go out
-  /// of scope we pop back off the stack in correct order.
-  ///
-  class Local {
-    // The Local structure is a single pointer word to the value we want
+  class SmartVal {
+  protected:
+    // The smart pointer contains a single pointer word to the value we want
     // to work with.
     Val* mRecord;
 
+    SmartVal(Val *aRecord)
+    : mRecord(aRecord)
+    {
+    }
+
   public:
-    Local(Val aVal)
-    : mRecord(engine().pushLocal(aVal))
-    {
-      //
-    }
-
-    Local()
-    : Local(Undefined())
-    {
-      //
-    }
-
-    ~Local() {
-      engine().popLocal();
-    }
-
     // Deref ops
     Val& operator*() const {
       return *mRecord;
@@ -492,14 +493,94 @@ namespace AotJS {
     }
   };
 
+  ///
+  /// GC-safe wrapper cell for a Val allocated on the stack.
+  /// Do NOT store a Local in the heap or return it as a value; it will explode!
+  ///
+  /// The engine keeps a second stack with the actual Val cells,
+  /// so while we're in the scope they stay alive during GC. When we go out
+  /// of scope we pop back off the stack in correct order.
+  ///
+  class Local : public SmartVal {
+  public:
+
+    ///
+    /// The constructor pushes a value onto the engine-managed stack.
+    /// It will be cleaned up by the destructor in opposite order at
+    /// the end of the function...
+    ///
+    Local(Val aVal)
+    : SmartVal(engine().pushLocal(aVal))
+    {
+      //
+    }
+
+    Local(const Local& aLocal)
+    : Local(aLocal.mRecord)
+    {
+      // override the copy constructor
+      // to make sure we push as expected
+    }
+
+    Local(Local&& aMoved)
+    : Local(aMoved.mRecord)
+    {
+      // overide move constructor
+    }
+
+    Local()
+    : Local(Undefined())
+    {
+      //
+    }
+
+    ~Local() {
+      engine().popLocal(mRecord);
+    }
+  };
+
+  ///
+  /// Return values need special handling to allocate them in the parent scope,
+  /// or everything gets very confusing.
+  ///
+  /// Never allocate a RetVal yourself or you may be surprised.
+  /// Never, ever allocate one on the heap.
+  ///
+  /// Any function that returns a RetVal must allocate a Scope at its start,
+  /// which allocates space before you allocate your locals. Instead of manually
+  /// returning, call `return scope.escape(val);`... Then it'll get
+  /// cleaned up in the parent function by the RetVal's destructor.
+  ///
+  class RetVal : public SmartVal {
+    // Let Scope create new RetVals.
+    friend class Scope;
+
+    template <class T> friend class Ret;
+
+    // The constructors *should not* push on the stack.
+    // Instead, take the current scope's space.
+    RetVal(Val* aRecord)
+    : SmartVal(aRecord)
+    {
+      //
+    }
+
+  public:
+    ~RetVal() {
+      // The destructor _should_ pop the stack.
+      // This happens in the calling function, not the returning function.
+      engine().popLocal(mRecord);
+    }
+  };
+
   template <class T>
   class Retained {
     Local mLocal;
 
   public:
 
-    Retained(const T* aLocal)
-    : mLocal(aLocal)
+    Retained(const T* aPointer)
+    : mLocal(aPointer)
     {
       // Initialize with a pointer
     }
@@ -518,7 +599,14 @@ namespace AotJS {
     Retained(const Retained<T>& aOther)
     : Retained(aOther.asPointer())
     {
-      // Initialize with another Retained<T>
+      // override the copy constructor
+      // so we push/pop as expected
+    }
+
+    Retained(Retained&& aMoved)
+    : Retained(aMoved.asPointer())
+    {
+      // override the move constructor
     }
 
     // Deref ops
@@ -540,9 +628,61 @@ namespace AotJS {
     operator const T*() const {
       return asPointer();
     }
+  };
 
-    operator Local() const {
-      return mLocal;
+  ///
+  /// Type-specific smart pointer wrapper class for GC'd return values
+  ///
+  /// See notes for RetVal.
+  ///
+  template <class T>
+  class Ret {
+    RetVal mRetVal;
+
+    // uhh, should be the same one. not sure
+    template <class T2=T> friend class ScopeWith;
+
+    Ret(Val* aVal)
+    : mRetVal(aVal)
+    {
+      // Initialize with a pointer
+    }
+
+    T* asPointer() const {
+      if (mRetVal->isGCThing()) {
+        // fixme this should be static_cast but it won't let me
+        // since it doesn't think they're related by inheritence
+        return reinterpret_cast<T*>(&(mRetVal->asGCThing()));
+      } else {
+        // todo: handle
+        std::abort();
+      }
+    }
+
+  public:
+
+    // Deref ops
+
+    T& operator*() const {
+      return *asPointer();
+    }
+
+    T* operator->() const {
+      return asPointer();
+    }
+
+    // Conversion ops
+
+    operator T*() const {
+      return asPointer();
+    }
+
+    operator const T*() const {
+      return asPointer();
+    }
+
+    operator Val() const {
+      return *mRetVal;
     }
   };
 
@@ -551,6 +691,38 @@ namespace AotJS {
   {
     return Retained<T>(new T(std::forward<Args>(aArgs)...));
   }
+
+  class Scope {
+    Val* mRecord;
+
+  public:
+    Scope()
+    : mRecord(engine().pushLocal(Undefined()))
+    {
+      //
+    }
+
+    RetVal escape(Val aVal) {
+      *mRecord = aVal;
+      return RetVal(mRecord);
+    }
+  };
+
+  template <class T>
+  class ScopeWith {
+    Val* mRecord;
+  public:
+    ScopeWith()
+    : mRecord(engine().pushLocal(Undefined()))
+    {
+      //
+    }
+
+    Ret<T> escape(const T* aVal) {
+      *mRecord = aVal;
+      return Ret<T>(mRecord);
+    }
+  };
 
   class PropIndex : public JSThing {
   public:
@@ -585,16 +757,18 @@ namespace AotJS {
       return data;
     }
 
-    Retained<String> toString() const override {
-      return Retained<String>(this);
+    Ret<String> toString() const override {
+      ScopeWith<String> scope;
+      return scope.escape(this);
     }
 
     bool operator==(const String &rhs) const {
       return data == rhs.data;
     }
 
-    Retained<String> operator+(const String &rhs) const {
-      return retain<String>(data + rhs.data);
+    Ret<String> operator+(const String &rhs) const {
+      ScopeWith<String> scope;
+      return scope.escape(new String(data + rhs.data));
     }
   };
 
@@ -615,8 +789,9 @@ namespace AotJS {
 
     string dump() override;
 
-    Retained<String> toString() const override {
-      return retain<String>("Symbol(" + getName() + ")");
+    Ret<String> toString() const override {
+      ScopeWith<String> scope;
+      return scope.escape(new String("Symbol(" + getName() + ")"));
     }
 
     const string &getName() const {
@@ -657,12 +832,13 @@ namespace AotJS {
     string dump() override;
     Typeof typeof() const override;
 
-    Retained<String> toString() const override {
+    Ret<String> toString() const override {
+      ScopeWith<String> scope;
       // todo get the constructor name
-      return retain<String>("[object Object]");
+      return scope.escape(new String("[object Object]"));
     }
 
-    Val getProp(Val name);
+    RetVal getProp(Val name);
     void setProp(Val name, Val val);
   };
 
@@ -755,7 +931,7 @@ namespace AotJS {
       return mArity;
     }
 
-    Local call(Val aThis, std::vector<Val> aArgs);
+    RetVal call(Val aThis, std::vector<Val> aArgs);
 
     ///
     /// Return one of the captured variable pointers.
@@ -767,8 +943,9 @@ namespace AotJS {
     void markRefsForGC() override;
     string dump() override;
 
-    Retained<String> toString() const override {
-      return retain<String>("[Function: " + name() + "]");
+    Ret<String> toString() const override {
+      ScopeWith<String> scope;
+      return scope.escape(new String("[Function: " + name() + "]"));
     }
 
   };
