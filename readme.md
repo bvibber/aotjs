@@ -192,7 +192,6 @@ Example hand-compiled programs using it:
 
 Next steps (runtime):
 * allocate Frames/arguments on stack instead of heap
-* allocate non-captured local vars on stack instead of heap
 * use PropIndex* instead of Val as property keys
 * make sure hash map behaves right in properties
 * put return value in the Frame to keep it alive
