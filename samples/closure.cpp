@@ -19,14 +19,14 @@ int main() {
       // Conceptually we allocate all the locals at the start of the scope.
       // They'll all be filled with the JS `undefined` value initially.
       //
-      // We allocate them in Scopes, which are kept on a stack while we
-      // run and, in the case of closure captures, can live on beyond
-      // the function end.
-      //
-      // Todo make this prettier?
-      // Todo have a better facility for immutable bindings.
+      // We allocate most vars in Locals, which are wrapped pointers into a
+      // stack of Vals that are kept alive while. In the case of closure
+      // captures, they're allocated in a GC'd Scope object on the heap.
       auto closure1 = retain<Scope>(1);
 
+      // JS variable bindings are all pointers, either wrapped with a Local
+      // smart pointer to the stack or straight as a Capture pointer into a
+      // heap Scope.
       Local a;
       Capture b = closure1->local(0);
       Local func;

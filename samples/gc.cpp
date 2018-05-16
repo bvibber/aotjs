@@ -5,13 +5,11 @@
 using namespace AotJS;
 
 int main() {
-  // All non-captured local variables will live in this scope,
-  // to protect them from being GC'd. We must pop it at the end
-  // of the function.
+  // To protect them from being GC'd, local variables are kept on a
+  // stack and we use Local smart pointers to manage the stack record's
+  // lifetime.
   //
-  // Beware that temporary variables in function call parameters and such
-  // may be GC'd in some cases, so always stick things immediately in here
-  // on allocation!
+  // A 'Local' otherwise works like a 'Val*', and is bit-equivalent.
   Local func;
 
   // Register the function!
@@ -20,21 +18,18 @@ int main() {
     1, // argument count
     // no scope capture
     [] (Function& func, Frame& frame) -> Val {
-      // Fetch the arguments. The function arity must be correct!
+      // Fetch the arguments into local Capture (Val*) refs, which can be
+      // either read/modified or passed on to a 
+      // The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
-      // Can skip this call if no references to args.
       //
-      // If it were captured, though, we'd have to copy it into locals below.
-      Val* root = frame.arg(0);
+      // If it were captured by a lamdba, we'd have to copy it into locals below.
+      Capture root = frame.arg(0);
 
-      // Local variable definitions are hoisted to the top.
-      // They are all initialized to Undefined() at Scope creation.
-      // These are variant wrappers which are also retained while it's on
-      // the live-scope-call stack.
-      //
-      // This could be made prettier in C++17 with destructuring and
-      // templates for the item count, but let's be explicit for what the
-      // low-level code does.
+      // JavaScript local variable definitions are hoisted to the top.
+      // They are all initialized to Undefined() when allocated on the stack.
+      // These are variant wrappers (Val) which are also retained while on
+      // the live-scope-call stack in the Local wrappers.
       Local obj;
       Local objname;
       Local propname;
@@ -43,6 +38,8 @@ int main() {
       Local notpropname;
 
       // Now our function body actually starts!
+      // Remember JS variable bindings are modeled as pointers to Val cells,
+      // which we are filling with object pointers.
       *obj = new Object();
       *objname = new String("an_obj");
       *propname = new String("propname");
