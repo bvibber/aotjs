@@ -19,7 +19,7 @@ int main() {
     // no scope capture
     [] (Function& func, Frame& frame) -> Val {
       // Fetch the arguments into local Capture (Val*) refs, which can be
-      // either read/modified or passed on to a 
+      // either read/modified or passed on to a
       // The function arity must be correct!
       // Attempting to read beyond the actual number will be invalid.
       //

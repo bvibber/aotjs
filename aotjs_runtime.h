@@ -569,6 +569,10 @@ namespace AotJS {
     bool operator==(const String &rhs) const {
       return data == rhs.data;
     }
+
+    String operator+(const String &rhs) const {
+      return data + rhs.data;
+    }
   };
 
   class Symbol : public PropIndex {
