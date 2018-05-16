@@ -210,7 +210,7 @@ namespace AotJS {
     auto index = mProps.find(*name);
     if (index == mProps.end()) {
       if (mPrototype) {
-        return mPrototype->getProp(*name);
+        return scope.escape(*mPrototype->getProp(*name));
       } else {
         return scope.escape(Undefined());
       }
