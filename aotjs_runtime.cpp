@@ -23,7 +23,7 @@ namespace std {
     if (ref.isString()) {
       return hash<string>{}(ref.asString());
     } else {
-      return hash<void*>{}(ref.asPointer());
+      return hash<uint64_t>{}(ref.raw());
     }
   }
 }
