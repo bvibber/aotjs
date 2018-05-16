@@ -273,6 +273,8 @@ namespace AotJS {
     Val(Deleted aVal)    : mRaw(tag_deleted) {}
     Val(Internal* aVal)  : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
     Val(JSThing* aVal)   : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
+    Val(const Internal* aVal): mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
+    Val(const JSThing* aVal) : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
     /*
     // fixme how do we genericize these subclasses?
     // it keeps sending me to the bool variant if I don't declare every variation.
