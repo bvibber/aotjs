@@ -25,7 +25,7 @@ int main() {
       // which itself is kept on the same stack.
       //
       // JS variable bindings are all pointers, either wrapped with a Local
-      // or HeapCell smart pointer to the stack or straight as a Capture
+      // or Retained<T> smart pointer to the stack or straight as a Binding
       // pointer into one of those.
       Retained<Cell> _b;
 
@@ -39,14 +39,14 @@ int main() {
       *func = new Function(
         "func",    // name
         0,         // arg arity
-        {_b},     // captures
+        {_b},      // captures
         // implementation
         [] (Function& func, Frame& frame) -> Val {
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
           //
-          // The capture gives you a reference into one of the linked Scopes,
-          // which are retained via a chain referenced by the Function object.
+          // The capture binding gives you a reference into one of the linked
+          // heap Cells, which are retained via a list in the Function object.
           Binding b = func.capture(0).binding();
 
           // replace the variable in the parent scope
