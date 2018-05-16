@@ -275,18 +275,6 @@ namespace AotJS {
     Val(JSThing* aVal)   : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
     Val(const Internal* aVal): mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
     Val(const JSThing* aVal) : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
-    /*
-    // fixme how do we genericize these subclasses?
-    // it keeps sending me to the bool variant if I don't declare every variation.
-    // and can't use static_cast because it thinks they're not inheritence-related yet.
-    */
-    Val(Cell* aVal)     : Val(reinterpret_cast<Internal*>(aVal)) {}
-    Val(Frame* aVal)    : Val(reinterpret_cast<Internal*>(aVal)) {}
-    Val(String* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
-    Val(Symbol* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
-    Val(Function* aVal) : Val(reinterpret_cast<JSThing*>(aVal)) {}
-    Val(Object* aVal)   : Val(reinterpret_cast<JSThing*>(aVal)) {}
-
 
     Val &operator=(const Val &aVal) {
       mRaw = aVal.mRaw;
@@ -498,6 +486,10 @@ namespace AotJS {
     operator Val*() const {
       return mRecord;
     }
+
+    operator const Val*() const {
+      return mRecord;
+    }
   };
 
   template <class T>
@@ -542,6 +534,10 @@ namespace AotJS {
     // Conversion ops
 
     operator T*() const {
+      return asPointer();
+    }
+
+    operator const T*() const {
       return asPointer();
     }
 
