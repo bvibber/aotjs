@@ -6,12 +6,14 @@ gc.html
 gc.js
 gc.wasm
 gc.wast
+gc.wasm.gz
 gc.wasm.map
 closure
 closure.html
 closure.js
 closure.wasm
 closure.wast
+closure.wasm.gz
 closure.wasm.map
 
 barf

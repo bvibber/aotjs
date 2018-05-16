@@ -7,6 +7,7 @@
 #include <sstream>
 
 namespace AotJS {
+  Typeof typeof_jsthing = "jsthing"; // base class should not be exposed
   Typeof typeof_undefined = "undefined";
   Typeof typeof_number = "number";
   Typeof typeof_boolean = "boolean";
@@ -177,7 +178,7 @@ namespace AotJS {
     buf << "})";
     return buf.str();
   }
-  
+
   #pragma mark PropIndex
   PropIndex::~PropIndex() {
     //
@@ -224,6 +225,16 @@ namespace AotJS {
 
   Internal::~Internal() {
     //
+  }
+
+  #pragma mark JSThing
+
+  JSThing::~JSThing() {
+    //
+  }
+
+  Typeof JSThing::typeof() const {
+    return typeof_jsthing;
   }
 
   #pragma mark Scope
