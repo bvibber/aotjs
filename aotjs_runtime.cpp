@@ -49,6 +49,80 @@ namespace AotJS {
     return false;
   }
 
+  Local Val::operator+(const Local& rhs) const {
+    if (isObject()) {
+      return asObject() + rhs;
+    } else {
+      return Local(toDouble() + rhs.toDouble());
+    }
+  }
+
+  // Checked conversions
+  bool Val::toBool() const
+  {
+    if (isBool()) {
+      return asBool();
+    } else if (isInt32()) {
+      return static_cast<bool>(asInt32());
+    } else if (isDouble()) {
+      return static_cast<bool>(asDouble());
+    } else if (isUndefined()) {
+      return false;
+    } else if (isNull()) {
+      return false;
+    } else if (isString()) {
+      return asString().length() > 0;
+    } else {
+      return true;
+    }
+  }
+
+  int32_t Val::toInt32() const
+  {
+    if (isInt32()) {
+      return asInt32();
+    } else if (isBool()) {
+      return static_cast<int32_t>(asBool());
+    } else if (isDouble()) {
+      return static_cast<int32_t>(asDouble());
+    } else if (isUndefined()) {
+      return 0;
+    } else if (isNull()) {
+      return 0;
+    } else {
+      // todo: handle objects
+      std::abort();
+    }
+  }
+
+  double Val::toDouble() const;
+  {
+    if (isDouble()) {
+      return asDouble();
+    } else if (isBool()) {
+      return static_cast<double>(asBool());
+    } else if (isInt32()) {
+      return static_cast<double>(asInt32());
+    } else if (isUndefined()) {
+      return NAN;
+    } else if (isNull()) {
+      return 0;
+    } else {
+      // todo: handle objects...
+      std::abort();
+    }
+  }
+
+  Retained<String> Val::toString() const
+  {
+    if (isJSThing()) {
+      return asJSThing.toString();
+    } else {
+      // todo: flip this?
+      return dump();
+    }
+  }
+
   string Val::dump() const {
     std::ostringstream buf;
     if (isDouble()) {
@@ -237,6 +311,14 @@ namespace AotJS {
     return typeof_jsthing;
   }
 
+  Retained<String> JSThing::toString() const {
+    return retain<String>("[jsthing JSThing]");
+  }
+
+  Local JSThing::operator+(const Local& rhs) const {
+    return Local(NAN);
+  }
+
   #pragma mark Cell
 
   Cell::~Cell() {
@@ -323,7 +405,7 @@ namespace AotJS {
     // set of all objects in order to do the final sweep.
     mObjects.insert(&obj);
   }
- 
+
   Val* Engine::pushLocal(Val val)
   {
     mLocalStack.push_back(val);

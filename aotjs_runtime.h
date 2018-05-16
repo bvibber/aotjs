@@ -69,7 +69,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef Val (*FunctionBody)(Function& func, Frame& frame);
+  typedef Local (*FunctionBody)(Function& func, Frame& frame);
 
   ///
   /// Represents an entire JS world.
@@ -214,6 +214,9 @@ namespace AotJS {
     ~JSThing() override;
 
     virtual Typeof typeof() const;
+
+    Retained<String> toString() const virtual;
+    Local operator+(const Local& rhs) const virtual;
   };
 
   ///
@@ -392,6 +395,8 @@ namespace AotJS {
       #endif
     }
 
+    // Un-checked conversions returning a raw thingy
+
     GCThing& asGCThing() const {
       return *static_cast<GCThing *>(asPointer());
     }
@@ -420,7 +425,21 @@ namespace AotJS {
       return *static_cast<Function *>(asPointer());
     }
 
-    bool operator==(const Val &rhs) const;
+    // Unchecked conversions returning a Retained<T>
+    template <class T>
+    Retained<T> as() const {
+      return new Retained<T>(static_cast<T*>(asPointer()));
+    }
+
+    // Checked conversions
+    bool toBool() const;
+    int32_t toInt32() const;
+    double toDouble() const;
+    Retained<String> toString() const;
+
+    bool operator==(const Val& rhs) const;
+
+    Local operator+(const Local& rhs) const;
 
     string dump() const;
 
@@ -465,7 +484,7 @@ namespace AotJS {
     }
 
     // Deref ops
-    Val& operator*() {
+    Val& operator*() const {
       return *mRecord;
     }
 
@@ -475,7 +494,7 @@ namespace AotJS {
 
     // Conversion ops
 
-    operator Val*() {
+    operator Val*() const {
       return mRecord;
     }
   };
@@ -526,8 +545,8 @@ namespace AotJS {
       return asPointer();
     }
 
-    operator Val() const {
-      return *mLocal;
+    operator Local() const {
+      return mLocal;
     }
   };
 
@@ -562,6 +581,10 @@ namespace AotJS {
 
     string dump() override;
 
+    size_t length() const {
+      return data.size();
+    }
+
     operator string() const {
       return data;
     }
@@ -570,8 +593,8 @@ namespace AotJS {
       return data == rhs.data;
     }
 
-    String operator+(const String &rhs) const {
-      return data + rhs.data;
+    Local operator+(const Local &rhs) const override {
+      return retain<String>(data + rhs->toString()->data);
     }
   };
 

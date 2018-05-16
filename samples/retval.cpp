@@ -14,22 +14,21 @@ int main() {
     "work",
     0, // argument count
     // no scope capture
-    [] (Function& func, Frame& frame) -> Val {
-      return new String("work");
+    [] (Function& func, Frame& frame) -> Local {
+      return Local(new String("work"));
     }
   );
 
   *play = new Function(
     "play",
     0, // argument count
-    [] (Function& func, Frame& frame) -> Val {
-      return new String("play");
+    [] (Function& func, Frame& frame) -> Local {
+      return Local(new String("play"));
     }
   );
 
   // todo: operator overloading on Val
-  *retval = new String(work->call(Null(), {}).asString() + play->call(Null(), {}).asString());
-  //*retval = work->call(Null(), {}) + play->call(Null(), {});
+  *retval = *(*work->call(Null(), {}) + *play->call(Null(), {}));
 
   // should say "workplay"
   std::cout << "should say 'workplay': " << retval->dump() << "\n";
