@@ -51,7 +51,8 @@ namespace AotJS {
   class RetVal;
   template <class T> class Ret;
 
-  typedef std::initializer_list<Local> ArgList;
+  typedef std::initializer_list<Local> RawArgList;
+  class ArgList;
 
   class GCThing;
   class Cell;
@@ -76,7 +77,7 @@ namespace AotJS {
     // just a tag
   };
 
-  typedef RetVal (*FunctionBody)(Function& func, Frame& frame);
+  typedef RetVal (*FunctionBody)(Function& func, Local this_, ArgList args);
 
   ///
   /// Represents an entire JS world.
@@ -113,6 +114,7 @@ namespace AotJS {
     friend class RetVal;
     template <class T> friend class ScopeRet;
     template <class T> friend class Ret;
+    friend class ArgList;
     Val* stackTop();
     Val* pushLocal(Val ref);
     void popLocal(Val* mRecord);
@@ -458,7 +460,7 @@ namespace AotJS {
       }
     }
 
-    RetVal call(Local aThis, ArgList aArgs) const;
+    RetVal call(Local aThis, RawArgList aArgs) const;
 
   };
 
@@ -750,6 +752,31 @@ namespace AotJS {
     }
   };
 
+  class ArgList {
+    Val* mBegin;
+    size_t mSize;
+
+    friend class Function;
+
+    // Never create an ArgList yourselve, use an initializer list (RawArgList)
+    ArgList(Function& func, RawArgList args);
+
+  public:
+
+    ~ArgList() {
+      // Like a Scope, we pop back to the beginning.
+      engine().popLocal(mBegin);
+    }
+
+    size_t size() const {
+      return mSize;
+    }
+
+    Val* operator[](size_t index) const {
+      return &mBegin[index];
+    }
+  };
+
   class PropIndex : public JSThing {
   public:
     PropIndex()
@@ -957,7 +984,7 @@ namespace AotJS {
       return mArity;
     }
 
-    RetVal call(Local aThis, ArgList aArgs);
+    RetVal call(Local aThis, RawArgList aArgs);
 
     ///
     /// Return one of the captured variable pointers.
@@ -974,67 +1001,6 @@ namespace AotJS {
       return scope.escape(new String("[Function: " + name() + "]"));
     }
 
-  };
-
-  ///
-  /// Represents a JS stack frame.
-  /// Contains function reference, `this` pointer, and arguments.
-  ///
-  class Frame : public Internal {
-    Function *mFunc;
-    Val mThis;
-    size_t mArity;
-    std::vector<Val*> mArgs;
-
-  public:
-    Frame(
-      Function& aFunc,
-      Local aThis,
-      ArgList aArgs)
-    : Internal(),
-      mFunc(&aFunc),
-      mThis(*aThis),
-      mArity(aArgs.size()),
-      mArgs()
-    {
-      for (auto& arg : aArgs) {
-        mArgs.push_back(arg);
-      }
-
-      // Guarantee the expected arg count is always there,
-      // reserving space and initializing them.
-      // todo: implement es6 default parameters
-      while (mArgs.size() < mFunc->arity()) {
-        mArgs.push_back(Local(Undefined()));
-      }
-    }
-
-    ~Frame() override;
-
-    Function& func() const {
-      return *mFunc;
-    }
-
-    ///
-    /// Get a reference to the first argument.
-    ///
-    /// Guaranteed to be valid up to the number of expected arguments
-    /// from the function's arity, even if the actual argument arity
-    /// is lower.
-    ///
-    Val* arg(size_t index) {
-      return mArgs[index];
-    }
-
-    ///
-    /// Return the actual number of arguments passed.
-    ///
-    size_t arity() {
-      return mArity;
-    }
-
-    void markRefsForGC() override;
-    string dump() override;
   };
 
 }

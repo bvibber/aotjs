@@ -18,7 +18,7 @@ int main() {
     "work",
     1, // argument count
     // no scope capture
-    [] (Function& func, Frame& frame) -> RetVal {
+    [] (Function& func, Local this_, ArgList args) -> RetVal {
       // Functions which can return a value must allocate stack space for the
       // retval, Or Else.
       ScopeRetVal scope;
@@ -29,7 +29,7 @@ int main() {
       // Attempting to read beyond the actual number will be invalid.
       //
       // If it were captured by a lamdba, we'd have to copy it into locals below.
-      Binding root = frame.arg(0);
+      Binding root = args[0];
 
       // JavaScript local variable definitions are hoisted to the top.
       // They are all initialized to Undefined() when allocated on the stack.

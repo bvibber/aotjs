@@ -19,7 +19,7 @@ int main() {
       "work",
       0, // argument count
       // no scope capture
-      [] (Function& func, Frame& frame) -> RetVal {
+      [] (Function& func, Local this_, ArgList args) -> RetVal {
         ScopeRetVal scope;
         return scope.escape(new String("work"));
       }
@@ -28,7 +28,7 @@ int main() {
     *play = new Function(
       "play",
       0, // argument count
-      [] (Function& func, Frame& frame) -> RetVal {
+      [] (Function& func, Local this_, ArgList args) -> RetVal {
         ScopeRetVal scope;
         return scope.escape(new String("play"));
       }

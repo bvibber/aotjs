@@ -15,7 +15,7 @@ int main() {
     // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Function& func_, Frame& frame) -> RetVal {
+    [] (Function& func_, Local this_, ArgList args) -> RetVal {
       ScopeRetVal scope;
 
       // Variable hoisting!
@@ -44,7 +44,7 @@ int main() {
         0,         // arg arity
         {_b},      // captures
         // implementation
-        [] (Function& func, Frame& frame) -> RetVal {
+        [] (Function& func, Local this_, ArgList args) -> RetVal {
           // Allocate local scope for the return value.
           ScopeRetVal scope;
 

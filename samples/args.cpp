@@ -12,12 +12,15 @@ int main() {
   *report = new Function(
     "report",
     3, // argument count
-    [] (Function& func, Frame& frame) -> RetVal {
+    [] (Function& func, Local this_, ArgList args) -> RetVal {
       ScopeRetVal scope;
 
-      Binding a = frame.arg(0);
-      Binding b = frame.arg(1);
-      Binding c = frame.arg(2);
+      // this might work in c++17 mode with suitable iteators added
+      //Binding [a, b, c] = args;
+
+      Binding a = args[0];
+      Binding b = args[1];
+      Binding c = args[2];
 
       std::cout << a->dump() << ", " << b->dump() << ", " << c->dump() << "\n";
 

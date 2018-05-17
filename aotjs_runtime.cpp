@@ -150,7 +150,7 @@ namespace AotJS {
     return buf.str();
   }
 
-  RetVal Val::call(Local aThis, ArgList aArgs) const
+  RetVal Val::call(Local aThis, RawArgList aArgs) const
   {
     ScopeRetVal scope;
     if (isFunction()) {
@@ -160,6 +160,34 @@ namespace AotJS {
       std::cerr << "not a function\n";
       #endif
       std::abort();
+    }
+  }
+
+  #pragma mark ArgList
+
+  ArgList::ArgList(Function& func, RawArgList args)
+  : mBegin(nullptr),
+    mSize(0)
+  {
+    // Copy all the temporaries passed in to a lower scope
+    size_t index = 0;
+    for (auto& local : args) {
+      Val* binding = engine().pushLocal(*local);
+      if (index++ == 0) {
+        mBegin = binding;
+      } else {
+        mSize++;
+      }
+    }
+    // Assign space for undefined for anything left.
+    // todo: apply es6 default params
+    while (index < func.arity()) {
+      Val* binding = engine().pushLocal(Undefined());
+      if (index++ == 0) {
+        mBegin = binding;
+      } else {
+        mSize++;
+      }
     }
   }
 
@@ -337,24 +365,6 @@ namespace AotJS {
     return buf.str();
   }
 
-  #pragma mark Frame
-
-  Frame::~Frame() {
-    //
-  }
-
-  void Frame::markRefsForGC() {
-    mFunc->markForGC();
-
-    mThis.markForGC();
-  }
-
-  string Frame::dump() {
-    std::ostringstream buf;
-    buf << "Frame(...)";
-    return buf.str();
-  }
-
   #pragma mark Function
 
   Function::~Function() {
@@ -372,11 +382,9 @@ namespace AotJS {
   }
 
 
-  RetVal Function::call(Local aThis, ArgList aArgs) {
+  RetVal Function::call(Local aThis, RawArgList aArgs) {
     ScopeRetVal scope;
-    // todo: allocate frame args data on the stack
-    Retained<Frame> frame(*this, aThis, aArgs);
-    return scope.escape(*mBody(*this, *frame));
+    return scope.escape(*mBody(*this, aThis, ArgList(*this, aArgs)));
   }
 
   string Function::dump() {
