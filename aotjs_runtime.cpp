@@ -9,14 +9,14 @@
 #include <sstream>
 
 namespace AotJS {
-  Typeof typeof_jsthing = "jsthing"; // base class should not be exposed
-  Typeof typeof_undefined = "undefined";
-  Typeof typeof_number = "number";
-  Typeof typeof_boolean = "boolean";
-  Typeof typeof_string = "string";
-  Typeof typeof_symbol = "symbol";
-  Typeof typeof_function = "function";
-  Typeof typeof_object = "object";
+  TypeOf typeOfJSThing = "jsthing"; // base class should not be exposed
+  TypeOf typeOfUndefined = "undefined";
+  TypeOf typeOfNumber = "number";
+  TypeOf typeOfBoolean = "boolean";
+  TypeOf typeOfString = "string";
+  TypeOf typeOfSymbol = "symbol";
+  TypeOf typeOfFunction = "function";
+  TypeOf typeOfObject = "object";
 }
 
 #pragma mark Val hash helpers
@@ -213,8 +213,8 @@ namespace AotJS {
     //
   }
 
-  Typeof Object::typeof() const {
-    return typeof_object;
+  TypeOf Object::typeOf() const {
+    return typeOfObject;
   }
 
   static RetVal normalizePropName(Val aName) {
@@ -298,8 +298,8 @@ namespace AotJS {
     //
   }
 
-  Typeof String::typeof() const {
-    return typeof_string;
+  TypeOf String::typeOf() const {
+    return typeOfString;
   }
 
   string String::dump() {
@@ -317,8 +317,8 @@ namespace AotJS {
     //
   }
 
-  Typeof Symbol::typeof() const {
-    return typeof_symbol;
+  TypeOf Symbol::typeOf() const {
+    return typeOfSymbol;
   }
 
   string Symbol::dump() {
@@ -341,8 +341,8 @@ namespace AotJS {
     //
   }
 
-  Typeof JSThing::typeof() const {
-    return typeof_jsthing;
+  TypeOf JSThing::typeOf() const {
+    return typeOfJSThing;
   }
 
   Ret<String> JSThing::toString() const {
@@ -372,8 +372,8 @@ namespace AotJS {
     //
   }
 
-  Typeof Function::typeof() const {
-    return typeof_function;
+  TypeOf Function::typeOf() const {
+    return typeOfFunction;
   }
 
   void Function::markRefsForGC() {

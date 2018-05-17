@@ -19,16 +19,16 @@ namespace AotJS {
   using ::std::unordered_set;
   using ::std::unordered_map;
 
-  typedef const char *Typeof;
+  typedef const char *TypeOf;
 
-  extern Typeof typeof_jsthing;
-  extern Typeof typeof_undefined;
-  extern Typeof typeof_number;
-  extern Typeof typeof_boolean;
-  extern Typeof typeof_string;
-  extern Typeof typeof_symbol;
-  extern Typeof typeof_function;
-  extern Typeof typeof_object;
+  extern TypeOf typeOfJSThing;
+  extern TypeOf typeOfUndefined;
+  extern TypeOf typeOfNumber;
+  extern TypeOf typeOfBoolean;
+  extern TypeOf typeOfString;
+  extern TypeOf typeOfSymbol;
+  extern TypeOf typeOfFunction;
+  extern TypeOf typeOfObject;
 
   class Val;
 }
@@ -233,7 +233,7 @@ namespace AotJS {
 
     ~JSThing() override;
 
-    virtual Typeof typeof() const;
+    virtual TypeOf typeOf() const;
 
     virtual Ret<String> toString() const;
   };
@@ -350,19 +350,19 @@ namespace AotJS {
     }
 
     bool isObject() const {
-      return isJSThing() && (asJSThing().typeof() == typeof_object);
+      return isJSThing() && (asJSThing().typeOf() == typeOfObject);
     }
 
     bool isString() const {
-      return isJSThing() && (asJSThing().typeof() == typeof_string);
+      return isJSThing() && (asJSThing().typeOf() == typeOfString);
     }
 
     bool isSymbol() const {
-      return isJSThing() && (asJSThing().typeof() == typeof_symbol);
+      return isJSThing() && (asJSThing().typeOf() == typeOfSymbol);
     }
 
     bool isFunction() const {
-      return isJSThing() && (asJSThing().typeof() == typeof_function);
+      return isJSThing() && (asJSThing().typeOf() == typeOfFunction);
     }
 
     double asDouble() const {
@@ -807,7 +807,7 @@ namespace AotJS {
 
     ~String() override;
 
-    Typeof typeof() const override;
+    TypeOf typeOf() const override;
 
     string dump() override;
 
@@ -847,7 +847,7 @@ namespace AotJS {
 
     ~Symbol() override;
 
-    Typeof typeof() const override;
+    TypeOf typeOf() const override;
 
     string dump() override;
 
@@ -892,7 +892,7 @@ namespace AotJS {
 
     void markRefsForGC() override;
     string dump() override;
-    Typeof typeof() const override;
+    TypeOf typeOf() const override;
 
     Ret<String> toString() const override {
       ScopeRet<String> scope;
@@ -980,7 +980,7 @@ namespace AotJS {
 
     ~Function() override;
 
-    Typeof typeof() const override;
+    TypeOf typeOf() const override;
 
     std::string name() const {
       return mName;
