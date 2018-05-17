@@ -92,17 +92,14 @@ namespace AotJS {
     // Global root object.
     Object *mRoot;
 
-    // a stack of pointers to values on the 'real' stack.
+    // a stack of Val cells, to which we keep pointers in vars and 'real' stack.
     // Or, in theory we could scan the real stack but may have false values
     // and could run into problems with values optimized into locals which
     // aren't on the emscripten actual stack in wasm!
-    std::vector<Val> mLocalStack;
-
-    // We also keep a stack of pointes into the locals stack, which represent
-    // pre-allocated return values for functions which return RetVal or Ret<T>.
-    // Each Scope object allocates a ret val on the locals stac on construction,
-    // and the RetVal de-allocates it on destruction in the parent function.
-    std::vector<Val*> mScopeStack;
+    // todo: don't need vector really here?
+    Val* mStackBegin;
+    Val* mStackTop;
+    Val* mStackEnd;
 
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
@@ -132,6 +129,8 @@ namespace AotJS {
     {
       //
     }
+
+    ~Engine();
 
     // ick!
     void setRoot(Object& aRoot) {
@@ -285,7 +284,6 @@ namespace AotJS {
     static const uint64_t tag_internal   = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
     static const uint64_t tag_jsthing    = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
 
-    Val(const Val &aVal) : mRaw(aVal.raw()) {}
     Val(double aVal)     : mDouble(aVal) {}
     Val(int32_t aVal)    : mRaw(((uint64_t)((int64_t)aVal) & ~tag_mask) | tag_int32) {}
     Val(bool aVal)       : mRaw(((uint64_t)aVal & ~tag_mask) | tag_bool) {}
@@ -296,6 +294,9 @@ namespace AotJS {
     Val(JSThing* aVal)   : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
     Val(const Internal* aVal): mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
     Val(const JSThing* aVal) : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
+
+    Val(const Val &aVal) : mRaw(aVal.raw()) {}
+    Val()                : Val(Undefined()) {}
 
     Val &operator=(const Val &aVal) {
       mRaw = aVal.mRaw;

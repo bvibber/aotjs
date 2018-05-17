@@ -396,20 +396,21 @@ namespace AotJS {
 
   #pragma mark Engine
 
+  // warning: if stack goes beyond this it will explode
   Engine::Engine(size_t aStackSize)
   : mRoot(nullptr),
-    mLocalStack(),
+    mStackBegin(new Val[aStackSize]),
+    mStackTop(mStackBegin),
+    mStackEnd(mStackBegin + aStackSize),
     mObjects()
   {
-    // horrible singleton cheating
-    //engine_singleton = this;
-
-    // warning: if stack goes beyond this it will explode
-    mLocalStack.reserve(aStackSize);
-
     // We must clear those pointers first or else GC might explode
     // while allocating the root object!
     mRoot = new Object();
+  }
+
+  Engine::~Engine() {
+    delete[] mStackBegin;
   }
 
   void Engine::registerForGC(GCThing& obj) {
@@ -421,18 +422,24 @@ namespace AotJS {
 
   Val* Engine::stackTop()
   {
-    return &mLocalStack.back();
+    return mStackTop;
   }
 
   Val* Engine::pushLocal(Val val)
   {
-    mLocalStack.push_back(val);
+    if (mStackTop++ > mStackEnd) {
+        #ifdef DEBUG
+        std::cerr << "stack overflow!\n";
+        #endif
+        std::abort();
+    }
+    *mStackTop = val;
     return stackTop();
   }
 
   void Engine::popLocal(Val* expectedTop) {
     #ifdef DEBUG
-    if (expectedTop > stackTop()) {
+    if (expectedTop < mStackBegin || expectedTop > mStackTop) {
       std::cerr << "bad stack pointer: "
         << stackTop()
         << ", expected "
@@ -441,9 +448,7 @@ namespace AotJS {
       std::abort();
     }
     #endif
-    while (stackTop() > expectedTop) {
-      mLocalStack.pop_back();
-    }
+    mStackTop = expectedTop;
   }
 
   void Engine::gc() {
@@ -458,8 +463,8 @@ namespace AotJS {
     }
 
     // Mark anything on the stack of currently open scopes
-    for (auto& record : mLocalStack) {
-      record.markForGC();
+    for (Val* record = mStackBegin; record < mStackTop; record++) {
+      record->markForGC();
     }
 
     // 2) Sweep!
