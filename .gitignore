@@ -24,3 +24,11 @@
 /retval.wast
 /retval.wasm.gz
 /retval.wasm.map
+
+/args
+/args.html
+/args.js
+/args.wasm
+/args.wast
+/args.wasm.gz
+/args.wasm.map
