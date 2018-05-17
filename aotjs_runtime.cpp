@@ -150,7 +150,7 @@ namespace AotJS {
     return buf.str();
   }
 
-  RetVal Val::call(Val aThis, std::vector<Val> aArgs) const
+  RetVal Val::call(Local aThis, ArgList aArgs) const
   {
     ScopeRetVal scope;
     if (isFunction()) {
@@ -372,7 +372,7 @@ namespace AotJS {
   }
 
 
-  RetVal Function::call(Val aThis, std::vector<Val> aArgs) {
+  RetVal Function::call(Local aThis, ArgList aArgs) {
     ScopeRetVal scope;
     // todo: allocate frame args data on the stack
     Retained<Frame> frame(*this, aThis, aArgs);

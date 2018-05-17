@@ -51,6 +51,8 @@ namespace AotJS {
   class RetVal;
   template <class T> class Ret;
 
+  typedef std::initializer_list<Local> ArgList;
+
   class GCThing;
   class Cell;
   class Frame;
@@ -456,7 +458,7 @@ namespace AotJS {
       }
     }
 
-    RetVal call(Val aThis, std::vector<Val> aArgs) const;
+    RetVal call(Local aThis, ArgList aArgs) const;
 
   };
 
@@ -512,6 +514,16 @@ namespace AotJS {
     {
       //
     }
+
+    /// C++ doesn't want to do multiple implicit conversions, so let's add
+    /// some explicit constructors.
+    Local(bool aVal)      : Local(Val(aVal)) {}
+    Local(int32_t aVal)   : Local(Val(aVal)) {}
+    Local(double aVal)    : Local(Val(aVal)) {}
+    Local(Undefined aVal) : Local(Val(aVal)) {}
+    Local(Null aVal)      : Local(Val(aVal)) {}
+    Local(Internal* aVal) : Local(Val(aVal)) {}
+    Local(JSThing* aVal)  : Local(Val(aVal)) {}
 
     Local(const Local& aLocal)
     : Local(aLocal.mRecord)
@@ -945,7 +957,7 @@ namespace AotJS {
       return mArity;
     }
 
-    RetVal call(Val aThis, std::vector<Val> aArgs);
+    RetVal call(Local aThis, ArgList aArgs);
 
     ///
     /// Return one of the captured variable pointers.
@@ -972,24 +984,28 @@ namespace AotJS {
     Function *mFunc;
     Val mThis;
     size_t mArity;
-    std::vector<Val> mArgs;
+    std::vector<Val*> mArgs;
 
   public:
     Frame(
       Function& aFunc,
-      Val aThis,
-      std::vector<Val> aArgs)
+      Local aThis,
+      ArgList aArgs)
     : Internal(),
       mFunc(&aFunc),
-      mThis(aThis),
+      mThis(*aThis),
       mArity(aArgs.size()),
-      mArgs(aArgs)
+      mArgs()
     {
+      for (auto& arg : aArgs) {
+        mArgs.push_back(arg);
+      }
+
       // Guarantee the expected arg count is always there,
       // reserving space and initializing them.
       // todo: implement es6 default parameters
       while (mArgs.size() < mFunc->arity()) {
-        mArgs.push_back(Undefined());
+        mArgs.push_back(Local(Undefined()));
       }
     }
 
@@ -1007,7 +1023,7 @@ namespace AotJS {
     /// is lower.
     ///
     Val* arg(size_t index) {
-      return &mArgs[index];
+      return mArgs[index];
     }
 
     ///
