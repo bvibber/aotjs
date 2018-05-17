@@ -147,12 +147,10 @@ namespace AotJS {
   };
 
   // Singleton
-  extern Engine* engine_singleton;
+  extern Engine engine_singleton;
 
   // Singleton access
-  static inline Engine& engine() {
-    return *engine_singleton;
-  }
+  Engine& engine();
 
   ///
   /// Base class for an item that can be garbage-collected and may

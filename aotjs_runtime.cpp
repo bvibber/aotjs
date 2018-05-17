@@ -33,7 +33,6 @@ namespace std {
 
 namespace AotJS {
 
-  Engine* engine_singleton = new Engine();
 
   bool Val::operator==(const Val &rhs) const {
     // Bit-identical always matches!
@@ -403,7 +402,7 @@ namespace AotJS {
     mObjects()
   {
     // horrible singleton cheating
-    engine_singleton = this;
+    //engine_singleton = this;
 
     // warning: if stack goes beyond this it will explode
     mLocalStack.reserve(aStackSize);
@@ -501,5 +500,11 @@ namespace AotJS {
     }
     buf << "])";
     return buf.str();
+  }
+
+  Engine engine_singleton;
+
+  Engine& engine() {
+    return engine_singleton;
   }
 }
