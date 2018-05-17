@@ -538,10 +538,11 @@ namespace AotJS {
 
   public:
 
-    Retained(const T* aPointer)
-    : mLocal(aPointer)
+    template <typename... Args>
+    Retained(Args&&... aArgs)
+    : mLocal(new T(std::forward<Args>(aArgs)...))
     {
-      // Initialize with a pointer
+      // Initialize a shiny new object
     }
 
     T* asPointer() const {
@@ -553,19 +554,6 @@ namespace AotJS {
         // todo: handle
         std::abort();
       }
-    }
-
-    Retained(const Retained<T>& aOther)
-    : Retained(aOther.asPointer())
-    {
-      // override the copy constructor
-      // so we push/pop as expected
-    }
-
-    Retained(Retained&& aMoved)
-    : Retained(aMoved.asPointer())
-    {
-      // override the move constructor
     }
 
     // Deref ops
@@ -672,12 +660,6 @@ namespace AotJS {
       return *mRetVal;
     }
   };
-
-  template <class T, typename... Args>
-  inline Retained<T> retain(Args&&... aArgs)
-  {
-    return Retained<T>(new T(std::forward<Args>(aArgs)...));
-  }
 
   ///
   /// Any function that does not return a JS value should declare a

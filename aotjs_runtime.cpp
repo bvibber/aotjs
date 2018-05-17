@@ -374,7 +374,8 @@ namespace AotJS {
 
   RetVal Function::call(Val aThis, std::vector<Val> aArgs) {
     ScopeRetVal scope;
-    auto frame = retain<Frame>(*this, aThis, aArgs);
+    // todo: allocate frame args data on the stack
+    Retained<Frame> frame(*this, aThis, aArgs);
     return scope.escape(*mBody(*this, *frame));
   }
 

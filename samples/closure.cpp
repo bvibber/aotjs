@@ -30,7 +30,7 @@ int main() {
       // JS variable bindings are all pointers, either wrapped with a Local
       // or Retained<T> smart pointer to the stack or straight as a Binding
       // pointer into one of those.
-      auto _b = retain<Cell>();
+      Retained<Cell> _b;
 
       Local a;
       Binding b = _b->binding();
