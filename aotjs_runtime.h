@@ -58,6 +58,8 @@ namespace AotJS {
   class Cell;
   class Frame;
 
+  typedef std::initializer_list<Cell*> RawCaptureList;
+
   class PropIndex;
   class String;
   class Symbol;
@@ -966,7 +968,7 @@ namespace AotJS {
     Function(
       std::string aName,
       size_t aArity,
-      std::vector<Cell*> aCaptures,
+      RawCaptureList aCaptures,
       FunctionBody aBody)
     : Object(), // todo: have a function prototype object!
       mName(aName),

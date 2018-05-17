@@ -152,6 +152,14 @@ a cell on the stack before its scope opens, which is still readable on the
 calling function's scope. The function then returns a RetVal which points to
 that value. Currently must call scope.escape(foo) but may be able to elide that.
 
+Captured variables are individually allocated in GC'd Cells on the heap,
+themselves kept alive on the locals stack until they're passed as a list of
+Cell references into the Function object at creation time. This eats up a few
+extra words per captured variable, but usually there aren't that many so
+probably fine. And it means there's no worry about dependencies if multiple
+closures capture overlapping subsets of variables -- each captured var has
+its own GC-managed lifetime.
+
 
 # NaN-boxing
 
