@@ -137,6 +137,21 @@ Ok there's several classes of variable bindings in JS:
     * have the _Capture_ carry pointers, which can reach arbitrarily high
     * the Capture references the current scope. Or a list of all scopes it uses?
 
+Changed this to use a parallel stack of Val cells, moderated by smart pointers
+in Local/Retained<T> vars and managed by Scope and ScopeRet instances. This is
+inspired by V8's Local/Handle and EscapableHandleScope stuff.
+
+Each function has at top-level scope a Scope object, which saves the stack
+position. Then any non-captured locals are allocated through Local instances,
+which advance the stack and hold a pointer to the cell. At the end of the func
+the Scope goes out of scope and resets the stack pointer, invalidating all the
+Local instances used in the meantime.
+
+For return values, a ScopeRetVal or ScopeRet<T> is used instead, which allocates
+a cell on the stack before its scope opens, which is still readable on the
+calling function's scope. The function then returns a RetVal which points to
+that value. Currently must call scope.escape(foo) but may be able to elide that.
+
 
 # NaN-boxing
 
@@ -192,10 +207,8 @@ Example hand-compiled programs using it:
 * [samples/retval.js](samples/retval.js) -> [samples/retval.cpp](samples/retval.cpp)
 
 Next steps (runtime):
-* allocate Frames/arguments on stack instead of heap
 * use PropIndex* instead of Val as property keys
 * make sure hash map behaves right in properties
-* put return value in the Frame to keep it alive
 
 Next steps (features):
 * provide string <-> number conversions

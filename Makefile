@@ -69,4 +69,4 @@ retval.js : samples/retval.cpp $(SOURCES) $(HEADERS)
 	$(EMCC) $(CFLAGS_WASM) -o retval.js samples/retval.cpp $(SOURCES)
 
 args.js : samples/args.cpp $(SOURCES) $(HEADERS)
-	$(EMCC) $(CFLAGS_WASM) -o args.js samples/retval.cpp $(SOURCES)
+	$(EMCC) $(CFLAGS_WASM) -o args.js samples/args.cpp $(SOURCES)
