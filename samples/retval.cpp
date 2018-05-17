@@ -7,38 +7,44 @@ using namespace AotJS;
 int main() {
   // Variables hoisted...
   Scope scope;
-  Local work;
-  Local play;
-  Local retval;
 
-  *work = new Function(
-    "work",
-    0, // argument count
-    // no scope capture
-    [] (Function& func, Frame& frame) -> RetVal {
-      ScopeRetVal scope;
-      return scope.escape(new String("work"));
-    }
-  );
+  {
+    Scope scope2;
 
-  *play = new Function(
-    "play",
-    0, // argument count
-    [] (Function& func, Frame& frame) -> RetVal {
-      ScopeRetVal scope;
-      return scope.escape(new String("play"));
-    }
-  );
+    Local work;
+    Local play;
+    Local retval;
 
-  // todo: operator overloading on Val
-  *retval = *(*work->call(Null(), {}) + *play->call(Null(), {}));
+    *work = new Function(
+      "work",
+      0, // argument count
+      // no scope capture
+      [] (Function& func, Frame& frame) -> RetVal {
+        ScopeRetVal scope;
+        return scope.escape(new String("work"));
+      }
+    );
 
-  // should say "workplay"
-  std::cout << "should say 'workplay': " << retval->dump() << "\n";
+    *play = new Function(
+      "play",
+      0, // argument count
+      [] (Function& func, Frame& frame) -> RetVal {
+        ScopeRetVal scope;
+        return scope.escape(new String("play"));
+      }
+    );
 
-  std::cout << "before gc\n";
-  std::cout << engine().dump();
-  std::cout << "\n\n";
+    // todo: operator overloading on Val
+    *retval = *(*work->call(Null(), {}) + *play->call(Null(), {}));
+
+    // should say "workplay"
+    std::cout << "should say 'workplay': " << retval->dump() << "\n";
+
+    std::cout << "before gc\n";
+    std::cout << engine().dump();
+    std::cout << "\n\n";
+
+  }
 
   engine().gc();
 
