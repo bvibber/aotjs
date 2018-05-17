@@ -5,33 +5,35 @@
 using namespace AotJS;
 
 int main() {
-  Scope scope;
-  Local report;
+  {
+    Scope scope;
+    Local report;
 
-  // Register the function!
-  *report = new Function(
-    "report",
-    3, // argument count
-    [] (Function& func, Local this_, ArgList args) -> RetVal {
-      ScopeRetVal scope;
+    // Register the function!
+    *report = new Function(
+      "report",
+      3, // argument count
+      [] (Function& func, Local this_, ArgList args) -> RetVal {
+        ScopeRetVal scope;
 
-      // this might work in c++17 mode with suitable iteators added
-      //Binding [a, b, c] = args;
+        // this might work in c++17 mode with suitable iteators added
+        //Binding [a, b, c] = args;
 
-      Binding a = args[0];
-      Binding b = args[1];
-      Binding c = args[2];
+        Binding a = args[0];
+        Binding b = args[1];
+        Binding c = args[2];
 
-      std::cout << a->dump() << ", " << b->dump() << ", " << c->dump() << "\n";
+        std::cout << a->dump() << ", " << b->dump() << ", " << c->dump() << "\n";
 
-      return scope.escape(Undefined());
-    }
-  );
+        return scope.escape(Undefined());
+      }
+    );
 
-  report->call(Null(), {new String("a"), new String("b"), new String("c")});
-  report->call(Null(), {new String("a"), new String("b")});
-  report->call(Null(), {1, 2, 3});
-  report->call(Null(), {new Object(), 3.5, Null()});
+    report->call(Null(), {new String("a"), new String("b"), new String("c")});
+    report->call(Null(), {new String("a"), new String("b")});
+    report->call(Null(), {1, 2, 3});
+    report->call(Null(), {new Object(), 3.5, Null()});
+  }
 
   std::cout << "before gc\n";
   std::cout << engine().dump();

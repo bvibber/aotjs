@@ -166,27 +166,29 @@ namespace AotJS {
   #pragma mark ArgList
 
   ArgList::ArgList(Function& func, RawArgList args)
-  : mBegin(nullptr),
+  : mStackTop(engine().stackTop()),
+    mBegin(nullptr),
     mSize(0)
   {
     // Copy all the temporaries passed in to a lower scope
-    size_t index = 0;
+    size_t size = 0;
     for (auto& local : args) {
       Val* binding = engine().pushLocal(*local);
-      if (index++ == 0) {
+      if (size++ == 0) {
         mBegin = binding;
-      } else {
-        mSize++;
       }
     }
+
+    // Save the original argument list size for `arguments.length`
+    mSize = size;
+
     // Assign space for undefined for anything left.
+    // This means functions can access vars without a bounds check.
     // todo: apply es6 default params
-    while (index < func.arity()) {
+    while (size < func.arity()) {
       Val* binding = engine().pushLocal(Undefined());
-      if (index++ == 0) {
+      if (size++ == 0) {
         mBegin = binding;
-      } else {
-        mSize++;
       }
     }
   }

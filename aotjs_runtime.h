@@ -753,6 +753,7 @@ namespace AotJS {
   };
 
   class ArgList {
+    Val* mStackTop;
     Val* mBegin;
     size_t mSize;
 
@@ -765,14 +766,21 @@ namespace AotJS {
 
     ~ArgList() {
       // Like a Scope, we pop back to the beginning.
-      engine().popLocal(mBegin);
+      engine().popLocal(mStackTop);
     }
 
+    ///
+    /// Return the original argument list length
+    ///
     size_t size() const {
       return mSize;
     }
 
-    Val* operator[](size_t index) const {
+    ///
+    /// Return a Binding for the given argument index.
+    /// Valid up to the expected arity of the function.
+    ///
+    Binding operator[](size_t index) const {
       return &mBegin[index];
     }
   };

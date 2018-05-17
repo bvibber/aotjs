@@ -5,9 +5,9 @@ EMCC=em++
 SOURCES=aotjs_runtime.cpp
 HEADERS=aotjs_runtime.h
 #CFLAGS=-g -O3 -std=c++14
-CFLAGS=-g -O3 -std=c++14 -DFORCE_GC
+#CFLAGS=-g -O3 -std=c++14 -DFORCE_GC
 #CFLAGS=-g -O0 -std=c++14 -DFORCE_GC -DDEBUG
-#CFLAGS=-g -O0 -std=c++14
+CFLAGS=-g -O0 -std=c++14
 CFLAGS_NATIVE=$(CFLAGS)
 CFLAGS_WASM=$(CFLAGS) -s WASM=1 -s BINARYEN_TRAP_MODE=clamp -s NO_FILESYSTEM=1
 
