@@ -1,5 +1,7 @@
 #include "aotjs_runtime.h"
 
+#include <cmath>
+
 #ifdef DEBUG
 #include <iostream>
 #endif
