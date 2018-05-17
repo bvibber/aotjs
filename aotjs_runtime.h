@@ -6,6 +6,7 @@
 #endif
 
 #include <cinttypes>
+
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -614,8 +615,9 @@ namespace AotJS {
   class Ret {
     RetVal mRetVal;
 
-    // uhh, should be the same one. not sure
-    template <class T2=T> friend class ScopeRet;
+    // fails on GCC 8.1: error: default template arguments may not be used in template friend declarations
+    //template <class T2=T> friend class ScopeRet;
+    template <class T2> friend class ScopeRet;
 
     Ret(Val* aRecord)
     : mRetVal(aRecord)
@@ -893,10 +895,10 @@ namespace AotJS {
   /// References the
   ///
   class Function : public Object {
-    FunctionBody mBody;
     std::string mName;
     size_t mArity;
     std::vector<Cell*> mCaptures;
+    FunctionBody mBody;
 
   public:
     // For function with no captures
