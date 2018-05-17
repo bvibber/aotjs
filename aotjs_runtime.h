@@ -106,15 +106,13 @@ namespace AotJS {
 
     friend class Local;
     friend class Scope;
+    friend class ScopeRetVal;
     friend class RetVal;
-    template <class T> friend class ScopeWith;
+    template <class T> friend class ScopeRet;
     template <class T> friend class Ret;
+    Val* stackTop();
     Val* pushLocal(Val ref);
     void popLocal(Val* mRecord);
-
-    void pushScope(Val *aValPtr);
-    void popScope();
-    Val* currentRetVal();
 
   public:
     static const size_t defaultStackSize = 256 * 1024;
@@ -506,8 +504,7 @@ namespace AotJS {
 
     ///
     /// The constructor pushes a value onto the engine-managed stack.
-    /// It will be cleaned up by the destructor in opposite order at
-    /// the end of the function...
+    /// It will be cleaned up when the current Scope goes out of ... scope.
     ///
     Local(Val aVal)
     : SmartVal(engine().pushLocal(aVal))
@@ -532,44 +529,6 @@ namespace AotJS {
     : Local(Undefined())
     {
       //
-    }
-
-    ~Local() {
-      engine().popLocal(mRecord);
-    }
-  };
-
-  ///
-  /// Return values need special handling to allocate them in the parent scope,
-  /// or everything gets very confusing.
-  ///
-  /// Never allocate a RetVal yourself or you may be surprised.
-  /// Never, ever allocate one on the heap.
-  ///
-  /// Any function that returns a RetVal must allocate a Scope at its start,
-  /// which allocates space before you allocate your locals. Instead of manually
-  /// returning, call `return scope.escape(val);`... Then it'll get
-  /// cleaned up in the parent function by the RetVal's destructor.
-  ///
-  class RetVal : public SmartVal {
-    // Let Scope create new RetVals.
-    friend class Scope;
-
-    template <class T> friend class Ret;
-
-    // The constructors *should not* push on the stack.
-    // Instead, take the current scope's space.
-    RetVal(Val* aRecord)
-    : SmartVal(aRecord)
-    {
-      //
-    }
-
-  public:
-    ~RetVal() {
-      // The destructor _should_ pop the stack.
-      // This happens in the calling function, not the returning function.
-      engine().popLocal(mRecord);
     }
   };
 
@@ -631,6 +590,34 @@ namespace AotJS {
   };
 
   ///
+  /// Return values need special handling to allocate them in the parent scope,
+  /// or everything gets very confusing.
+  ///
+  /// Never allocate a RetVal yourself or you may be surprised.
+  /// Never, ever allocate one on the heap.
+  ///
+  /// Any function that returns a RetVal must allocate a Scope at its start,
+  /// which allocates space before you allocate your locals. Instead of manually
+  /// returning, call `return scope.escape(val);`... Then it'll get
+  /// cleaned up in the parent function by the parent Scope's destructor.
+  ///
+  class RetVal : public SmartVal {
+    // Let Scope create new RetVals.
+    friend class Scope;
+    friend class ScopeRetVal;
+
+    template <class T> friend class Ret;
+
+    // The constructors *should not* push on the stack.
+    // Instead, take the current scope's space.
+    RetVal(Val* aRecord)
+    : SmartVal(aRecord)
+    {
+      //
+    }
+  };
+
+  ///
   /// Type-specific smart pointer wrapper class for GC'd return values
   ///
   /// See notes for RetVal.
@@ -640,10 +627,10 @@ namespace AotJS {
     RetVal mRetVal;
 
     // uhh, should be the same one. not sure
-    template <class T2=T> friend class ScopeWith;
+    template <class T2=T> friend class ScopeRet;
 
-    Ret(Val* aVal)
-    : mRetVal(aVal)
+    Ret(Val* aRecord)
+    : mRetVal(aRecord)
     {
       // Initialize with a pointer
     }
@@ -692,14 +679,53 @@ namespace AotJS {
     return Retained<T>(new T(std::forward<Args>(aArgs)...));
   }
 
+  ///
+  /// Any function that does not return a JS value should declare a
+  /// Scope instance before allocating any local variables of the
+  /// Local or Retained<T> types.
+  ///
+  /// When the Scope goes out of scope (usually at end of function),
+  /// it will remove all later-allocated Local variables from the
+  /// stack, allowing object references to be garbage collected.
+  ///
+  /// If your function returns a value, use ScopeRetVal or
+  /// ScopeRet<T> instead.
+  ///
   class Scope {
-    Val* mRecord;
+    Val* mFirstRecord;
 
   public:
     Scope()
-    : mRecord(engine().pushLocal(Undefined()))
+    : mFirstRecord(engine().stackTop())
     {
       //
+    }
+
+    ~Scope() {
+      // Return the stack to its initial state.
+      engine().popLocal(mFirstRecord);
+    }
+  };
+
+  ///
+  /// Functions returning a JS value that could be a garbage-collected
+  /// reference should return the RetVal or Ret<T> types, and allocate
+  /// a ScopeRetVal immediately at the start before allocating any
+  /// Local or Retained<T> variables.
+  ///
+  /// This allocates space on the _parent_ Scope for a return value,
+  /// which should be intermediated through the escape() function.
+  ///
+  class ScopeRetVal {
+    Val* mRecord;
+    Scope mScope;
+
+  public:
+    ScopeRetVal()
+    : mRecord(engine().pushLocal(Undefined())),
+      mScope()
+    {
+      // We saved space for a return value on the parent scope...
     }
 
     RetVal escape(Val aVal) {
@@ -708,14 +734,18 @@ namespace AotJS {
     }
   };
 
+  ///
   template <class T>
-  class ScopeWith {
+  class ScopeRet {
     Val* mRecord;
+    Scope mScope;
+
   public:
-    ScopeWith()
-    : mRecord(engine().pushLocal(Undefined()))
+    ScopeRet()
+    : mRecord(engine().pushLocal(Undefined())),
+      mScope()
     {
-      //
+      // We saved space for a return value on the parent scope...
     }
 
     Ret<T> escape(const T* aVal) {
@@ -758,7 +788,7 @@ namespace AotJS {
     }
 
     Ret<String> toString() const override {
-      ScopeWith<String> scope;
+      ScopeRet<String> scope;
       return scope.escape(this);
     }
 
@@ -767,7 +797,7 @@ namespace AotJS {
     }
 
     Ret<String> operator+(const String &rhs) const {
-      ScopeWith<String> scope;
+      ScopeRet<String> scope;
       return scope.escape(new String(data + rhs.data));
     }
   };
@@ -790,7 +820,7 @@ namespace AotJS {
     string dump() override;
 
     Ret<String> toString() const override {
-      ScopeWith<String> scope;
+      ScopeRet<String> scope;
       return scope.escape(new String("Symbol(" + getName() + ")"));
     }
 
@@ -833,7 +863,7 @@ namespace AotJS {
     Typeof typeof() const override;
 
     Ret<String> toString() const override {
-      ScopeWith<String> scope;
+      ScopeRet<String> scope;
       // todo get the constructor name
       return scope.escape(new String("[object Object]"));
     }
@@ -944,7 +974,7 @@ namespace AotJS {
     string dump() override;
 
     Ret<String> toString() const override {
-      ScopeWith<String> scope;
+      ScopeRet<String> scope;
       return scope.escape(new String("[Function: " + name() + "]"));
     }
 

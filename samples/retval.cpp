@@ -16,7 +16,7 @@ int main() {
     0, // argument count
     // no scope capture
     [] (Function& func, Frame& frame) -> RetVal {
-      Scope scope;
+      ScopeRetVal scope;
       return scope.escape(new String("work"));
     }
   );
@@ -25,7 +25,7 @@ int main() {
     "play",
     0, // argument count
     [] (Function& func, Frame& frame) -> RetVal {
-      Scope scope;
+      ScopeRetVal scope;
       return scope.escape(new String("play"));
     }
   );

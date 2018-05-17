@@ -50,7 +50,7 @@ namespace AotJS {
   }
 
   RetVal Val::operator+(const Val& rhs) const {
-    Scope scope;
+    ScopeRetVal scope;
     // todo implement this correctly
     if (isString() || rhs.isString()) {
       return scope.escape(*toString() + *rhs.toString());
@@ -117,7 +117,7 @@ namespace AotJS {
 
   Ret<String> Val::toString() const
   {
-    ScopeWith<String> scope;
+    ScopeRet<String> scope;
     if (isJSThing()) {
       return scope.escape(asJSThing().toString());
     } else {
@@ -150,7 +150,7 @@ namespace AotJS {
 
   RetVal Val::call(Val aThis, std::vector<Val> aArgs) const
   {
-    Scope scope;
+    ScopeRetVal scope;
     if (isFunction()) {
       return scope.escape(*asFunction().call(aThis, aArgs));
     } else {
@@ -187,7 +187,7 @@ namespace AotJS {
   }
 
   static RetVal normalizePropName(Val aName) {
-    Scope scope;
+    ScopeRetVal scope;
     if (aName.isString()) {
       return scope.escape(aName);
     } else if (aName.isSymbol()) {
@@ -205,7 +205,7 @@ namespace AotJS {
   // todo: handle numeric indices
   // todo: getters
   RetVal Object::getProp(Val aName) {
-    Scope scope;
+    ScopeRetVal scope;
     Local name = *normalizePropName(aName);
     auto index = mProps.find(*name);
     if (index == mProps.end()) {
@@ -315,7 +315,7 @@ namespace AotJS {
   }
 
   Ret<String> JSThing::toString() const {
-    ScopeWith<String> scope;
+    ScopeRet<String> scope;
     return scope.escape(new String("[jsthing JSThing]"));
   }
 
@@ -371,7 +371,7 @@ namespace AotJS {
 
 
   RetVal Function::call(Val aThis, std::vector<Val> aArgs) {
-    Scope scope;
+    ScopeRetVal scope;
     auto frame = retain<Frame>(*this, aThis, aArgs);
     return scope.escape(*mBody(*this, *frame));
   }
@@ -407,24 +407,31 @@ namespace AotJS {
     mObjects.insert(&obj);
   }
 
+  Val* Engine::stackTop()
+  {
+    return &mLocalStack.back();
+  }
+
   Val* Engine::pushLocal(Val val)
   {
     mLocalStack.push_back(val);
-    return &mLocalStack.back();
+    return stackTop();
   }
 
   void Engine::popLocal(Val* expectedTop) {
     #ifdef DEBUG
-    if (expectedTop != &mLocalStack.back()) {
+    if (expectedTop > stackTop()) {
       std::cerr << "bad stack pointer: "
-        << &mLocalStack.back()
+        << stackTop()
         << ", expected "
         << expectedTop
         << "\n";
       std::abort();
     }
     #endif
-    mLocalStack.pop_back();
+    while (stackTop() > expectedTop) {
+      mLocalStack.pop_back();
+    }
   }
 
   void Engine::gc() {

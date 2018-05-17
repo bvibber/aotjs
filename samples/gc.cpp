@@ -10,6 +10,7 @@ int main() {
   // lifetime.
   //
   // A 'Local' otherwise works like a 'Val*', and is bit-equivalent.
+  Scope scope;
   Local func;
 
   // Register the function!
@@ -20,7 +21,7 @@ int main() {
     [] (Function& func, Frame& frame) -> RetVal {
       // Functions which can return a value must allocate stack space for the
       // retval, Or Else.
-      Scope scope;
+      ScopeRetVal scope;
 
       // Fetch the arguments into local Capture (Val*) refs, which can be
       // either read/modified or passed on to a

@@ -5,6 +5,7 @@
 using namespace AotJS;
 
 int main() {
+  Scope scope;
   Local work;
 
   // Register the function!
@@ -15,7 +16,7 @@ int main() {
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
     [] (Function& func_, Frame& frame) -> RetVal {
-      Scope scope;
+      ScopeRetVal scope;
 
       // Variable hoisting!
       // Conceptually we allocate all the locals at the start of the scope.
@@ -45,7 +46,7 @@ int main() {
         // implementation
         [] (Function& func, Frame& frame) -> RetVal {
           // Allocate local scope for the return value.
-          Scope scope;
+          ScopeRetVal scope;
 
           // Note we cannot use C++'s captures here -- they're not on GC heap and
           // would turn our call reference into a fat pointer, which we don't want.
