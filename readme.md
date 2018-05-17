@@ -189,6 +189,7 @@ polymorphic code looks something like:
 Example hand-compiled programs using it:
 * [samples/gc.cpp](samples/gc.cpp)
 * [samples/closure.js](samples/closure.js) -> [samples/closure.cpp](samples/closure.cpp)
+* [samples/retval.js](samples/retval.js) -> [samples/retval.cpp](samples/retval.cpp)
 
 Next steps (runtime):
 * allocate Frames/arguments on stack instead of heap
