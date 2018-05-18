@@ -98,47 +98,28 @@ namespace AotJS {
 
   int32_t Val::toInt32() const
   {
-    if (isInt32()) {
-      return asInt32();
-    } else if (isBool()) {
-      return static_cast<int32_t>(asBool());
-    } else if (isDouble()) {
-      return static_cast<int32_t>(asDouble());
-    } else if (isUndefined()) {
-      return 0;
-    } else if (isNull()) {
-      return 0;
+    if (isInt31()) {
+      return asInt31();
     } else {
-      // todo: handle objects
-      std::abort();
+      return as<Box<int32_t>>().val();
     }
   }
 
   double Val::toDouble() const
   {
-    if (isDouble()) {
-      return asDouble();
-    } else if (isBool()) {
-      return static_cast<double>(asBool());
-    } else if (isInt32()) {
-      return static_cast<double>(asInt32());
-    } else if (isUndefined()) {
-      return NAN;
-    } else if (isNull()) {
-      return 0;
+    if (isInt31()) {
+      return static_cast<double>(asInt31());
     } else {
-      // todo: handle objects...
-      std::abort();
+      return as<Box<double>>().val();
     }
   }
 
   Ret<String> Val::toString() const
   {
     ScopeRet<String> scope;
-    if (isJSThing()) {
-      return scope.escape(asJSThing().toString());
+    if (isGCThing()) {
+      return scope.escape(asGCThing().toString());
     } else {
-      // todo: flip this?
       return scope.escape(new String(dump()));
     }
   }
@@ -149,6 +130,8 @@ namespace AotJS {
       buf << asDouble();
     } else if (isInt32()) {
       buf << asInt32();
+    } else if (isInt31()) {
+      buf << asInt31();
     } else if (isBool()) {
       if (asBool()) {
         buf << "true";
@@ -221,6 +204,13 @@ namespace AotJS {
 
   string GCThing::dump() {
     return string(typeOf());
+  }
+
+  Ret<String> GCThing::toString() const {
+    ScopeRet<String> scope;
+    std::ostringstream buf;
+    buf << "[" << typeOf() << "]";
+    return scope.escape(new String(buf.str()));
   }
 
   TypeOf GCThing::typeOf() const {

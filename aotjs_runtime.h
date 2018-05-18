@@ -250,6 +250,8 @@ namespace AotJS {
     virtual string dump();
 
     virtual TypeOf typeOf() const;
+
+    virtual Ret<String> toString() const;
   };
 
   // Internal classes that should not be exposed to JS
@@ -279,7 +281,7 @@ namespace AotJS {
     ~JSThing() override;
     TypeOf typeOf() const override;
 
-    virtual Ret<String> toString() const;
+    Ret<String> toString() const override;
   };
 
   template <typename T>
@@ -289,7 +291,7 @@ namespace AotJS {
   public:
     Box(T aVal) : mVal(aVal) {}
 
-    T unbox() const {
+    T val() const {
       return mVal;
     }
 
@@ -319,7 +321,7 @@ namespace AotJS {
       GCThing* mPtr;
     };
 
-    static bool isInt31(int32_t aInt) {
+    static bool isValidInt31(int32_t aInt) {
       return ((aInt << 1) >> 1) == aInt;
     }
 
@@ -328,7 +330,7 @@ namespace AotJS {
     }
 
     static GCThing* tagOrBoxInt32(int32_t aInt) {
-      if (isInt31(aInt)) {
+      if (isValidInt31(aInt)) {
         return tagInt31(aInt);
       } else {
         return new Box<int32_t>(aInt);
@@ -391,7 +393,7 @@ namespace AotJS {
     }
 
     bool isInt32() const {
-      return isInt31() || isTypeOf(typeOfBoxInt32);
+      return isTypeOf(typeOfBoxInt32);
     }
 
     bool isBool() const {
@@ -431,15 +433,19 @@ namespace AotJS {
     }
 
     double asDouble() const {
-        return reinterpret_cast<Box<double>*>(mPtr)->unbox();
+        return reinterpret_cast<Box<double>*>(mPtr)->val();
+    }
+
+    int32_t asInt31() const {
+      return derefInt31(mPtr);
     }
 
     int32_t asInt32() const {
-      return reinterpret_cast<Box<int32_t>*>(mPtr)->unbox();
+      return reinterpret_cast<Box<int32_t>*>(mPtr)->val();
     }
 
     bool asBool() const {
-      return reinterpret_cast<Box<bool>*>(mPtr)->unbox();
+      return reinterpret_cast<Box<bool>*>(mPtr)->val();
     }
 
     Null asNull() const {
@@ -489,8 +495,8 @@ namespace AotJS {
     // Unchecked conversions returning a *T, castable to Retained<T>
     // or Ret<T>.
     template <class T>
-    T* as() const {
-      return static_cast<T*>(mPtr);
+    T& as() const {
+      return *static_cast<T*>(mPtr);
     }
 
     // Checked conversions
