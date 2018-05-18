@@ -460,13 +460,15 @@ namespace AotJS {
     mFalse(nullptr),
     mTrue(nullptr),
     mRoot(nullptr),
-    mStackBegin(new Val[aStackSize]),
-    mStackTop(mStackBegin),
-    mStackEnd(mStackBegin + aStackSize),
+    mStackBegin(nullptr),
+    mStackTop(nullptr),
+    mStackEnd(nullptr),
     mObjects()
   {
     // We must clear those pointers first or else GC might explode
     // while allocating the root & sigil objects!
+
+    // Define the sigils...
     mUndefined = new Box<Undefined>(Undefined());
     mNull = new Box<Null>(Null());
     mDeleted = new Box<Deleted>(Deleted());
@@ -475,6 +477,12 @@ namespace AotJS {
 
     // The global object.
     mRoot = new Object();
+
+    // Now create the locals stack.
+    // We can't allocate it earlier or it gets filled with bogus values.
+    mStackBegin = new Val[aStackSize];
+    mStackTop = mStackBegin;
+    mStackEnd = mStackBegin + aStackSize;
   }
 
   Engine::~Engine() {
@@ -548,8 +556,10 @@ namespace AotJS {
     }
 
     // Mark anything on the stack of currently open scopes
-    for (Val* record = mStackBegin; record < mStackTop; record++) {
-      record->markForGC();
+    if (mStackBegin) {
+        for (Val* record = mStackBegin; record < mStackTop; record++) {
+          record->markForGC();
+        }
     }
 
     // 2) Sweep!

@@ -313,8 +313,6 @@ namespace AotJS {
       GCThing* mPtr;
     };
 
-  public:
-
     static bool isInt31(int32_t aInt) {
       return ((aInt << 1) >> 1) == aInt;
     }
@@ -335,13 +333,23 @@ namespace AotJS {
       return static_cast<int32_t>(reinterpret_cast<size_t>(aPtr)) >> 1;
     }
 
-    Val(double aDouble)       : mPtr(new Box<double>(aDouble)) {}
-    Val(int32_t aInt)         : mPtr(tagOrBoxInt32(aInt)) {};
-    Val(bool aBool)           : mPtr(aBool ? engine().trueRef() : engine().falseRef()) {}
-    Val(Null aNull)           : mPtr(engine().nullRef()) {}
-    Val(Undefined aUndefined) : mPtr(engine().undefinedRef()) {}
-    Val(Deleted aDeleted)     : mPtr(engine().deletedRef()) {}
-    Val(const GCThing* aRef)  : mPtr(const_cast<GCThing*>(aRef)) {} // don't use null pointers!
+  public:
+
+    Val(GCThing* aRef) {
+      if (!aRef){
+         // don't use null pointers!
+        std::abort();
+      }
+      mPtr = aRef;
+    }
+
+    Val(const GCThing* aRef)  : Val(const_cast<GCThing*>(aRef)) {} // don't use null pointers!
+    Val(double aDouble)       : Val(new Box<double>(aDouble)) {}
+    Val(int32_t aInt)         : Val(tagOrBoxInt32(aInt)) {};
+    Val(bool aBool)           : Val(aBool ? engine().trueRef() : engine().falseRef()) {}
+    Val(Null aNull)           : Val(engine().nullRef()) {}
+    Val(Undefined aUndefined) : Val(engine().undefinedRef()) {}
+    Val(Deleted aDeleted)     : Val(engine().deletedRef()) {}
 
     Val(const Val &aVal) : mRaw(aVal.raw()) {}
     Val()                : Val(Undefined()) {}
