@@ -343,6 +343,7 @@ namespace AotJS {
 
   public:
 
+    #ifdef DEBUG
     Val(GCThing* aRef) {
       if (!aRef){
          // don't use null pointers!
@@ -350,6 +351,9 @@ namespace AotJS {
       }
       mPtr = aRef;
     }
+    #else
+    Val(GCThing* aRef)        : mPtr(aRef) {}
+    #endif
 
     Val(const GCThing* aRef)  : Val(const_cast<GCThing*>(aRef)) {} // don't use null pointers!
     Val(double aDouble)       : Val(new Box<double>(aDouble)) {}
