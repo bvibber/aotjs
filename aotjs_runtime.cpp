@@ -9,8 +9,16 @@
 #include <sstream>
 
 namespace AotJS {
+  TypeOf typeOfGCThing = "gcthing"; // base class should not be exposed
+  TypeOf typeOfInternal = "internal"; // internal class should not be exposed
   TypeOf typeOfJSThing = "jsthing"; // base class should not be exposed
+
+  TypeOf typeOfBoxDouble = "boxdouble";
+  TypeOf typeOfBoxInt32 = "boxint32";
+  TypeOf typeOfDeleted = "deleted";
+
   TypeOf typeOfUndefined = "undefined";
+  TypeOf typeOfNull = "null";
   TypeOf typeOfNumber = "number";
   TypeOf typeOfBoolean = "boolean";
   TypeOf typeOfString = "string";
@@ -36,7 +44,7 @@ namespace AotJS {
 
   bool Val::operator==(const Val &rhs) const {
     // Bit-identical always matches!
-    // This catches matching pointers (same object), matching ints, etc.
+    // This catches matching pointers (same object), matching int31s, etc.
     if (raw() == rhs.raw()) {
       return true;
     }
@@ -44,6 +52,14 @@ namespace AotJS {
     if (isString() && rhs.isString()) {
       // Two string instances may still compare equal.
       return asString() == rhs.asString();
+    }
+
+    // fixme handle box types better
+    if (isInt32() && rhs.isInt32()) {
+      return asInt32() == rhs.asInt32();
+    }
+    if (isDouble() && rhs.isDouble()) {
+      return asDouble() == rhs.asDouble();
     }
 
     // Non-identical non-string objects never compare identical.
@@ -207,6 +223,42 @@ namespace AotJS {
     return "GCThing";
   }
 
+  TypeOf GCThing::typeOf() const {
+    return typeOfGCThing;
+  }
+
+  #pragma mark Box
+
+  template <>
+  TypeOf Box<double>::typeOf() const {
+    return typeOfBoxDouble;
+  }
+
+  template <>
+  TypeOf Box<int32_t>::typeOf() const {
+    return typeOfBoxInt32;
+  }
+
+  template <>
+  TypeOf Box<Undefined>::typeOf() const {
+    return typeOfUndefined;
+  }
+
+  template <>
+  TypeOf Box<Null>::typeOf() const {
+    return typeOfNull;
+  }
+
+  template <>
+  TypeOf Box<bool>::typeOf() const {
+    return typeOfBoolean;
+  }
+
+  template <>
+  TypeOf Box<Deleted>::typeOf() const {
+    return typeOfDeleted;
+  }
+
   #pragma mark Object
 
   Object::~Object() {
@@ -335,6 +387,10 @@ namespace AotJS {
     //
   }
 
+  TypeOf Internal::typeOf() const {
+    return typeOfInternal;
+  }
+
   #pragma mark JSThing
 
   JSThing::~JSThing() {
@@ -398,14 +454,26 @@ namespace AotJS {
 
   // warning: if stack goes beyond this it will explode
   Engine::Engine(size_t aStackSize)
-  : mRoot(nullptr),
+  : mUndefined(nullptr),
+    mNull(nullptr),
+    mDeleted(nullptr),
+    mFalse(nullptr),
+    mTrue(nullptr),
+    mRoot(nullptr),
     mStackBegin(new Val[aStackSize]),
     mStackTop(mStackBegin),
     mStackEnd(mStackBegin + aStackSize),
     mObjects()
   {
     // We must clear those pointers first or else GC might explode
-    // while allocating the root object!
+    // while allocating the root & sigil objects!
+    mUndefined = new Box<Undefined>(Undefined());
+    mNull = new Box<Null>(Null());
+    mDeleted = new Box<Deleted>(Deleted());
+    mFalse = new Box<bool>(false);
+    mTrue = new Box<bool>(true);
+
+    // The global object.
     mRoot = new Object();
   }
 
@@ -460,6 +528,23 @@ namespace AotJS {
     // Mark anything reachable from the global root object.
     if (mRoot) {
       mRoot->markForGC();
+    }
+
+    // Mark our global sigil objects.
+    if (mUndefined) {
+      mUndefined->markForGC();
+    }
+    if (mNull) {
+      mNull->markForGC();
+    }
+    if (mDeleted) {
+      mDeleted->markForGC();
+    }
+    if (mFalse) {
+      mFalse->markForGC();
+    }
+    if (mTrue) {
+      mTrue->markForGC();
     }
 
     // Mark anything on the stack of currently open scopes

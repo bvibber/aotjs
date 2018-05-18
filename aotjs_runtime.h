@@ -21,8 +21,15 @@ namespace AotJS {
 
   typedef const char *TypeOf;
 
+  extern TypeOf typeOfGCThing;
+  extern TypeOf typeOfInternal;
   extern TypeOf typeOfJSThing;
+
+  extern TypeOf typeOfBoxDouble;
+  extern TypeOf typeOfBoxInt32;
+
   extern TypeOf typeOfUndefined;
+  extern TypeOf typeOfNull;
   extern TypeOf typeOfNumber;
   extern TypeOf typeOfBoolean;
   extern TypeOf typeOfString;
@@ -41,6 +48,7 @@ namespace std {
 
 namespace AotJS {
   typedef Val* Binding;
+  template <typename T> class Box;
 
   class Engine;
 
@@ -89,8 +97,15 @@ namespace AotJS {
   /// destroyed.
   ///
   class Engine {
+    // Sigil values with special boxed values
+    Box<Undefined>* mUndefined;
+    Box<Null>* mNull;
+    Box<Deleted>* mDeleted;
+    Box<bool>* mFalse;
+    Box<bool>* mTrue;
+
     // Global root object.
-    Object *mRoot;
+    Object* mRoot;
 
     // a stack of Val cells, to which we keep pointers in vars and 'real' stack.
     // Or, in theory we could scan the real stack but may have false values
@@ -139,6 +154,27 @@ namespace AotJS {
 
     Object* root() const {
       return mRoot;
+    }
+
+    // Sigil values
+    Box<Undefined>* undefinedRef() const {
+      return mUndefined;
+    }
+
+    Box<Null>* nullRef() const {
+      return mNull;
+    }
+
+    Box<Deleted>* deletedRef() const {
+      return mDeleted;
+    }
+
+    Box<bool>* falseRef() const {
+      return mFalse;
+    }
+
+    Box<bool>* trueRef() const {
+      return mTrue;
     }
 
     void gc();
@@ -206,6 +242,8 @@ namespace AotJS {
 
     // Really public!
     virtual string dump();
+
+    virtual TypeOf typeOf() const;
   };
 
   // Internal classes that should not be exposed to JS
@@ -218,6 +256,7 @@ namespace AotJS {
     }
 
     ~Internal() override;
+    TypeOf typeOf() const override;
   };
 
   ///
@@ -232,68 +271,77 @@ namespace AotJS {
     }
 
     ~JSThing() override;
-
-    virtual TypeOf typeOf() const;
+    TypeOf typeOf() const override;
 
     virtual Ret<String> toString() const;
   };
 
+  template <typename T>
+  class Box : public GCThing {
+    T mVal;
+
+  public:
+    Box(T aVal) : mVal(aVal) {}
+
+    T unbox() const {
+      return mVal;
+    }
+
+    TypeOf typeOf() const override;
+  };
+
   ///
-  /// Polymorphic JS values are handled by using 64-bit values with
-  /// NaN signalling, so they may contain either a double-precision float
-  /// or a typed value with up to a 48-bit pointer or integer payload.
+  /// Polymorphic JS values are handled by using pointer-sized values with
+  /// either a pointer to a GCThing or a tagged 31-bit integer with a tag bit
+  /// in the lowest bit.
   ///
-  /// This is similar to, but not the same as, the "Pun-boxing" used in
-  /// Mozilla's SpiderMonkey engine:
-  /// * https://github.com/mozilla/gecko-dev/blob/master/js/public/Value.h
+  /// Unlike NaN-boxing this means double-precision floats and some int32s
+  /// must be boxed into GCThing subclasses and allocated on the heap.
+  /// Other values like undefined, null, and boolean use special sigil
+  /// objects that don't have to be allocated on each use.
   ///
-  /// May not be optimal for wasm32 yet.
-  class alignas(8) Val {
+  /// However it is closer to the available reference types in the Wasm
+  /// garbage collection proposal: https://github.com/WebAssembly/gc/pull/34
+  /// which includes an int31ref tagged type which can be freely mixed with
+  /// references.
+  ///
+  /// And I don't expect high-performance float math to be a big use case
+  /// for this plugin model, so we'll live with the boxing.
+  class Val {
     union {
-      uint64_t mRaw;
-      int32_t mInt32;
-      double mDouble;
+      size_t mRaw;
+      GCThing* mPtr;
     };
 
   public:
 
-    // 13 bits reserved at top for NaN
-    //   one bit for the sign, haughty on his throne
-    //   eleven 1s for exponent, expanding through the 'verse
-    //   last 1 for the NaN marker, whispered in the night
-    // 3 bits to mark the low-level tag type
-    //   alchemy clouds its mind
-    // up to 48 bits for payload
-    //   x86_64 needs all 48 bits for pointers, or just 47 for user mode...?
-    //   aarch64 may need 48 bits too, and ... isn't signed?
-    //   ints, bools, 32-bit pointers use bottom 32 bits
-    //   null, undefined don't use any of the payload
-    static const uint64_t sign_bit       = 0b1000000000000000'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_mask       = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
-    // double cutoff: canonical NAN rep with sign/signal bit on
-    static const uint64_t tag_max_double = 0b1111111111111000'0000000000000000'0000000000000000'0000000000000000;
-    // integer types:
-    static const uint64_t tag_int32      = 0b1111111111111001'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_bool       = 0b1111111111111010'0000000000000000'0000000000000000'0000000000000000;
-    // tag-only types
-    static const uint64_t tag_null       = 0b1111111111111011'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_undefined  = 0b1111111111111100'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_deleted    = 0b1111111111111101'0000000000000000'0000000000000000'0000000000000000;
-    // GC'd pointer types:
-    static const uint64_t tag_min_gc     = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_internal   = 0b1111111111111110'0000000000000000'0000000000000000'0000000000000000;
-    static const uint64_t tag_jsthing    = 0b1111111111111111'0000000000000000'0000000000000000'0000000000000000;
+    static bool isInt31(int32_t aInt) {
+      return ((aInt << 1) >> 1) == aInt;
+    }
 
-    Val(double aVal)     : mDouble(aVal) {}
-    Val(int32_t aVal)    : mRaw(((uint64_t)((int64_t)aVal) & ~tag_mask) | tag_int32) {}
-    Val(bool aVal)       : mRaw(((uint64_t)aVal & ~tag_mask) | tag_bool) {}
-    Val(Undefined aVal)  : mRaw(tag_undefined) {}
-    Val(Null aVal)       : mRaw(tag_null) {}
-    Val(Deleted aVal)    : mRaw(tag_deleted) {}
-    Val(Internal* aVal)  : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
-    Val(JSThing* aVal)   : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
-    Val(const Internal* aVal): mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_internal) {}
-    Val(const JSThing* aVal) : mRaw((reinterpret_cast<uint64_t>(aVal) & ~tag_mask) | tag_jsthing) {}
+    static GCThing* tagInt31(int32_t aInt) {
+       return reinterpret_cast<GCThing*>(static_cast<size_t>((aInt << 1) | 1));
+    }
+
+    static GCThing* tagOrBoxInt32(int32_t aInt) {
+      if (isInt31(aInt)) {
+        return tagInt31(aInt);
+      } else {
+        return new Box<int32_t>(aInt);
+      }
+    }
+
+    static int32_t derefInt31(const GCThing* aPtr) {
+      return static_cast<int32_t>(reinterpret_cast<size_t>(aPtr)) >> 1;
+    }
+
+    Val(double aDouble)       : mPtr(new Box<double>(aDouble)) {}
+    Val(int32_t aInt)         : mPtr(tagOrBoxInt32(aInt)) {};
+    Val(bool aBool)           : mPtr(aBool ? engine().trueRef() : engine().falseRef()) {}
+    Val(Null aNull)           : mPtr(engine().nullRef()) {}
+    Val(Undefined aUndefined) : mPtr(engine().undefinedRef()) {}
+    Val(Deleted aDeleted)     : mPtr(engine().deletedRef()) {}
+    Val(const GCThing* aRef)  : mPtr(const_cast<GCThing*>(aRef)) {} // don't use null pointers!
 
     Val(const Val &aVal) : mRaw(aVal.raw()) {}
     Val()                : Val(Undefined()) {}
@@ -303,82 +351,80 @@ namespace AotJS {
       return *this;
     }
 
-    uint64_t raw() const {
+    size_t raw() const {
       return mRaw;
     }
 
-    uint64_t tag() const {
-      return mRaw & tag_mask;
+    bool tag() const {
+      return mRaw & 1;
     }
 
-    bool isDouble() const {
-      // Saw this trick in SpiderMonkey.
-      // Our tagged values will be > tag_max_double in uint64_t interpretation
-      // Any non-NaN negative double will be < that
-      // Any positive double, inverted, will be < that
-      return (mRaw | sign_bit) <= tag_max_double;
-    }
-
-    bool isInt32() const {
-      return tag() == tag_int32;
-    }
-
-    bool isBool() const {
-      return tag() == tag_bool;
-    }
-
-    bool isUndefined() const {
-      return tag() == tag_undefined;
-    }
-
-    bool isNull() const {
-      return tag() == tag_null;
+    bool isInt31() const {
+      return tag();
     }
 
     bool isGCThing() const {
-      // Another clever thing.
-      // All pointer types will have at least this value!
-      return mRaw >= tag_min_gc;
+      return !tag();
+    }
+
+    bool isTypeOf(TypeOf aExpected) const {
+        return isGCThing() && (mPtr->typeOf() == aExpected);
+    }
+
+    bool isDouble() const {
+      return isTypeOf(typeOfBoxDouble);
+    }
+
+    bool isInt32() const {
+      return isInt31() || isTypeOf(typeOfBoxInt32);
+    }
+
+    bool isBool() const {
+      return (mPtr == engine().trueRef()) || (mPtr == engine().falseRef());
+    }
+
+    bool isUndefined() const {
+      return (mPtr == engine().undefinedRef());
+    }
+
+    bool isNull() const {
+      return (mPtr == engine().nullRef());
     }
 
     bool isInternal() const {
-      return tag() == tag_internal;
+      return isGCThing() && isTypeOf(typeOfInternal);
     }
 
     bool isJSThing() const {
-      return tag() == tag_jsthing;
+      return isGCThing() && !isTypeOf(typeOfInternal);
     }
 
     bool isObject() const {
-      return isJSThing() && (asJSThing().typeOf() == typeOfObject);
+      return isTypeOf(typeOfObject);
     }
 
     bool isString() const {
-      return isJSThing() && (asJSThing().typeOf() == typeOfString);
+      return isTypeOf(typeOfString);
     }
 
     bool isSymbol() const {
-      return isJSThing() && (asJSThing().typeOf() == typeOfSymbol);
+      return isTypeOf(typeOfSymbol);
     }
 
     bool isFunction() const {
-      return isJSThing() && (asJSThing().typeOf() == typeOfFunction);
+      return isTypeOf(typeOfFunction);
     }
 
     double asDouble() const {
-      // Interpret all bits as double-precision float
-      return mDouble;
+        return reinterpret_cast<Box<double>*>(mPtr)->unbox();
     }
 
     int32_t asInt32() const {
-      // Bottom 32 bits are ours for ints.
-      return mInt32;
+      return reinterpret_cast<Box<int32_t>*>(mPtr)->unbox();
     }
 
     bool asBool() const {
-      // Bottom 1 bit is all we need!
-      // But treat it like an int32.
-      return (bool)mInt32;
+      return reinterpret_cast<Box<bool>*>(mPtr)->unbox();
     }
 
     Null asNull() const {
@@ -393,54 +439,43 @@ namespace AotJS {
       return Deleted();
     }
 
-    void *asPointer() const {
-      #if (PTRDIFF_MAX) > 2147483647
-        // 64-bit host -- drop the top 16 bits of NaN and tag.
-        // Assumes address space has only 48 significant bits
-        // but may be signed, as on x86_64.
-        // todo fix, we lost that sign extension. but it works?
-        return reinterpret_cast<void *>((mRaw << 16) >> 16);
-      #else
-        // 32 bit host -- bottom bits are ours, like an int.
-        return reinterpret_cast<void *>(mInt32);
-      #endif
-    }
-
     // Un-checked conversions returning a raw thingy
 
     GCThing& asGCThing() const {
-      return *static_cast<GCThing *>(asPointer());
+      return *mPtr;
     }
 
     Internal& asInternal() const {
-      return *static_cast<Internal *>(asPointer());
+      return *static_cast<Internal *>(mPtr);
     }
 
     JSThing& asJSThing() const {
-      return *static_cast<JSThing*>(asPointer());
+      return *static_cast<JSThing*>(mPtr);
     }
 
     Object& asObject() const {
-      return *static_cast<Object *>(asPointer());
+      // fixme it doesn't understand the type rels
+      // clean up these methods later
+      return *reinterpret_cast<Object *>(mPtr);
     }
 
     String& asString() const {
-      return *static_cast<String *>(asPointer());
+      return *reinterpret_cast<String *>(mPtr);
     }
 
     Symbol& asSymbol() const {
-      return *static_cast<Symbol *>(asPointer());
+      return *reinterpret_cast<Symbol *>(mPtr);
     }
 
     Function& asFunction() const {
-      return *static_cast<Function *>(asPointer());
+      return *reinterpret_cast<Function *>(mPtr);
     }
 
     // Unchecked conversions returning a *T, castable to Retained<T>
     // or Ret<T>.
     template <class T>
     T* as() const {
-      return static_cast<T*>(asPointer());
+      return static_cast<T*>(mPtr);
     }
 
     // Checked conversions
