@@ -97,6 +97,11 @@ namespace AotJS {
   /// destroyed.
   ///
   class Engine {
+    // Flag to disable GC until we've finished initializing.
+    // We need to be able to create a few sigil objects before
+    // it's possible to cleanly run the GC system.
+    bool mReadyForGC;
+
     // Sigil values with special boxed values
     Box<Undefined>* mUndefined;
     Box<Null>* mNull;
@@ -119,6 +124,7 @@ namespace AotJS {
     // Set of all live objects.
     // Todo: replace this with an allocator we know how to walk!
     unordered_set<GCThing *> mObjects;
+
     void registerForGC(GCThing& aObj);
     friend class GCThing;
 
@@ -352,6 +358,7 @@ namespace AotJS {
     Val(Deleted aDeleted)     : Val(engine().deletedRef()) {}
 
     Val(const Val &aVal) : mRaw(aVal.raw()) {}
+    Val(Val &aVal)       : mRaw(aVal.raw()) {}
     Val()                : Val(Undefined()) {}
 
     Val &operator=(const Val &aVal) {
@@ -376,7 +383,7 @@ namespace AotJS {
     }
 
     bool isTypeOf(TypeOf aExpected) const {
-        return isGCThing() && (mPtr->typeOf() == aExpected);
+      return isGCThing() && (mPtr->typeOf() == aExpected);
     }
 
     bool isDouble() const {
@@ -568,8 +575,7 @@ namespace AotJS {
     Local(double aVal)    : Local(Val(aVal)) {}
     Local(Undefined aVal) : Local(Val(aVal)) {}
     Local(Null aVal)      : Local(Val(aVal)) {}
-    Local(Internal* aVal) : Local(Val(aVal)) {}
-    Local(JSThing* aVal)  : Local(Val(aVal)) {}
+    Local(GCThing* aVal)  : Local(Val(aVal)) {}
 
     Local(const Local& aLocal)
     : Local(aLocal.mRecord)

@@ -220,7 +220,7 @@ namespace AotJS {
   }
 
   string GCThing::dump() {
-    return "GCThing";
+    return string(typeOf());
   }
 
   TypeOf GCThing::typeOf() const {
@@ -454,35 +454,27 @@ namespace AotJS {
 
   // warning: if stack goes beyond this it will explode
   Engine::Engine(size_t aStackSize)
-  : mUndefined(nullptr),
-    mNull(nullptr),
-    mDeleted(nullptr),
-    mFalse(nullptr),
-    mTrue(nullptr),
-    mRoot(nullptr),
-    mStackBegin(nullptr),
-    mStackTop(nullptr),
-    mStackEnd(nullptr),
+  : mReadyForGC(false),
+    mUndefined(new Box<Undefined>(Undefined())),
+    mNull(new Box<Null>(Null())),
+    mDeleted(new Box<Deleted>(Deleted())),
+    mFalse(new Box<bool>(false)),
+    mTrue(new Box<bool>(true)),
+    mRoot(new Object()),
+    mStackBegin( new Val[aStackSize]),
+    mStackTop(mStackBegin),
+    mStackEnd(mStackBegin + aStackSize),
     mObjects()
   {
-    // We must clear those pointers first or else GC might explode
-    // while allocating the root & sigil objects!
-
-    // Define the sigils...
-    mUndefined = new Box<Undefined>(Undefined());
-    mNull = new Box<Null>(Null());
-    mDeleted = new Box<Deleted>(Deleted());
-    mFalse = new Box<bool>(false);
-    mTrue = new Box<bool>(true);
-
-    // The global object.
-    mRoot = new Object();
-
-    // Now create the locals stack.
-    // We can't allocate it earlier or it gets filled with bogus values.
-    mStackBegin = new Val[aStackSize];
-    mStackTop = mStackBegin;
-    mStackEnd = mStackBegin + aStackSize;
+    // Ok, now that we've initialized those things it's safe
+    // to enable the GC registration system.
+    mReadyForGC = true;
+    registerForGC(*mUndefined);
+    registerForGC(*mNull);
+    registerForGC(*mDeleted);
+    registerForGC(*mFalse);
+    registerForGC(*mTrue);
+    registerForGC(*mRoot);
   }
 
   Engine::~Engine() {
@@ -493,7 +485,9 @@ namespace AotJS {
     // Because we don't yet control the allocation, we don't know how to walk
     // the heap looking for all objects. Instead, we need to keep a separate
     // set of all objects in order to do the final sweep.
-    mObjects.insert(&obj);
+    if (mReadyForGC) {
+      mObjects.insert(&obj);
+    }
   }
 
   Val* Engine::stackTop()
@@ -503,14 +497,15 @@ namespace AotJS {
 
   Val* Engine::pushLocal(Val val)
   {
+    Val* ptr = mStackTop;
     if (mStackTop++ > mStackEnd) {
-        #ifdef DEBUG
-        std::cerr << "stack overflow!\n";
-        #endif
-        std::abort();
+      #ifdef DEBUG
+      std::cerr << "stack overflow!\n";
+      #endif
+      std::abort();
     }
-    *mStackTop = val;
-    return stackTop();
+    *ptr = val;
+    return ptr;
   }
 
   void Engine::popLocal(Val* expectedTop) {
@@ -532,34 +527,39 @@ namespace AotJS {
     std::cerr << "starting gc mark/sweep: " << dump() <<"\n";
     #endif
 
-    // 1) Mark!
-    // Mark anything reachable from the global root object.
-    if (mRoot) {
-      mRoot->markForGC();
+    if (!mReadyForGC) {
+      // don't try to destroy our singleton sigils during initialization
+      return;
     }
+
+    // 1) Mark!
 
     // Mark our global sigil objects.
-    if (mUndefined) {
-      mUndefined->markForGC();
-    }
-    if (mNull) {
-      mNull->markForGC();
-    }
-    if (mDeleted) {
-      mDeleted->markForGC();
-    }
-    if (mFalse) {
-      mFalse->markForGC();
-    }
-    if (mTrue) {
-      mTrue->markForGC();
-    }
+    mUndefined->markForGC();
+    mNull->markForGC();
+    mDeleted->markForGC();
+    mFalse->markForGC();
+    mTrue->markForGC();
+
+    // Mark anything reachable from the global root object.
+    mRoot->markForGC();
 
     // Mark anything on the stack of currently open scopes
-    if (mStackBegin) {
-        for (Val* record = mStackBegin; record < mStackTop; record++) {
-          record->markForGC();
-        }
+    #if DEBUG
+    std::cerr << "stack: [";
+    bool first = true;
+    for (Val* record = mStackBegin; record < mStackTop; record++) {
+      if (first) {
+        first = false;
+      } else {
+        std::cerr << ",";
+      }
+      std::cerr << record->dump();
+    }
+    std::cerr << "]\n";
+    #endif
+    for (Val* record = mStackBegin; record < mStackTop; record++) {
+      record->markForGC();
     }
 
     // 2) Sweep!

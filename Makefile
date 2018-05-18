@@ -6,8 +6,8 @@ SOURCES=aotjs_runtime.cpp
 HEADERS=aotjs_runtime.h
 #CFLAGS=-g -O3
 #CFLAGS=-g -Os
-CFLAGS=-g -O3 -DFORCE_GC
-#CFLAGS=-g -O0 -DFORCE_GC -DDEBUG
+#CFLAGS=-g -O3 -DFORCE_GC
+CFLAGS=-g -O0 -DFORCE_GC -DDEBUG
 #CFLAGS=-g -O0
 
 CFLAGS_COMMON=$(CFLAGS) -std=c++14
