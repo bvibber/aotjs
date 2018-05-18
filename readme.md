@@ -67,7 +67,9 @@ JS values may be of these types:
 
 Many VMs do crazy things like using NaN bits in doubles to signal that the
 64-bit value actually contains an int32_t or pointer instead of a double.
-* todo -- check the NaN rules for WebAssembly if that's something that's safe!
+While this appears to work in WebAssembly -- as long as you don't transfer
+double values outside to the host environment -- I'm going with tagged
+pointers instead to be more similar to planned native Wasm GC in the future.
 
 
 ## Exceptions
@@ -163,6 +165,9 @@ its own GC-managed lifetime.
 
 # NaN-boxing
 
+(Note: decided against NaN-boxing and am going with tagged pointers and
+boxed floating-point instead.)
+
 NaN boxing makes use of the NaN space in double-precision floating point
 numbers, so variable-type values can be stored in a single 64-bit word.
 If the top 13 bits are all set, we have a "signalling NaN" that can't be
@@ -193,7 +198,7 @@ NaN value.
 * [SpiderMonkey thinking of changing their boxing format](https://bugzilla.mozilla.org/show_bug.cgi?id=1401624)
 * [JSC's format](https://github.com/adobe/webkit/blob/master/Source/JavaScriptCore/runtime/JSValue.h#L307)
 
-Currently I'm using a format similar to SpiderMonkey's but using only 3 bits
+I tried using a format similar to SpiderMonkey's but using only 3 bits
 for the tag (8 types), so top 16 bits is (signalling nan + tag) and bottom
 48 bits is the pointer payload.
 
@@ -201,6 +206,32 @@ One downside is that the constants for the tag checks are large, and get
 encoded at every check site. Alternately could right-shift by 48 and compare
 against smaller constants, but that's probably an extra clock cycle vs extra
 bytes in the binary.
+
+# Tagged pointers
+
+Instead of NaN boxing, I'm going with pointer-size words and a low-bit tag to
+indicate 31-bit integer values. This is more similar to what the native Wasm
+garbage collection proposal provides, and will make it easier to move over
+in the future.
+
+* Values are native pointer size (32 bit in wasm32, 64 bit on native testing)
+* If the lowest bit is 0, it's interpreted as a pointer.
+* If the lowest bit is 1, it's interpreted as an int32 and shifted right by one
+
+This means most common integers can be represented directly in the value, but
+larger ints and double-precision floats won't fit -- they must be boxed in a
+heap type, which is relatively inefficient.
+
+The other JS types -- undefined, null, boolean, etc -- are represented as
+objects, with well-known singleton values that can be bit-compared without
+allocating extra instances.
+
+In the Wasm GC spec, the tagged ints would be the 'int31ref' type, while others
+are references to objects.
+
+Downside is that floating-point math may be sslloowweerr due to need to allocate
+and destroy lots of tiny objects. Upside is that this is not expected to be a
+primary use case in terms of needing super-high performance.
 
 # Naive implementation
 
@@ -213,6 +244,7 @@ Example hand-compiled programs using it:
 * [samples/gc.cpp](samples/gc.cpp)
 * [samples/closure.js](samples/closure.js) -> [samples/closure.cpp](samples/closure.cpp)
 * [samples/retval.js](samples/retval.js) -> [samples/retval.cpp](samples/retval.cpp)
+* [samples/args.js](samples/args.js) -> [samples/args.cpp](samples/args.cpp)
 
 Next steps (runtime):
 * use PropIndex* instead of Val as property keys
