@@ -13,7 +13,7 @@ int main() {
 
     Local work;
     Local play;
-    Local retval;
+    Local life;
 
     *work = new Function(
       "work",
@@ -35,10 +35,10 @@ int main() {
     );
 
     // todo: operator overloading on Val
-    *retval = *(*work->call(Null(), {}) + *play->call(Null(), {}));
+    *life = *(*work->call(Null(), {}) + *play->call(Null(), {}));
 
     // should say "workplay"
-    std::cout << "should say 'workplay': " << retval->dump() << "\n";
+    std::cout << "should say 'workplay': " << life->dump() << "\n";
 
     std::cout << "before gc\n";
     std::cout << engine().dump();
