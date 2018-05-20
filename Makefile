@@ -17,9 +17,9 @@ CFLAGS_WASM=$(CFLAGS_COMMON) -s WASM=1 -s BINARYEN_TRAP_MODE=clamp -s NO_FILESYS
 
 all : native wasm
 
-native : build/gc build/closure build/retval build/args
+native : build/gc build/closure build/retval build/args build/mandelbrot
 
-wasm : build/gc.js build/closure.js build/retval.js build/args.js
+wasm : build/gc.js build/closure.js build/retval.js build/args.js build/mandelbrot.js
 
 clean :
 	rm -rf build
