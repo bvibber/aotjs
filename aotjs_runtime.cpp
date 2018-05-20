@@ -66,16 +66,6 @@ namespace AotJS {
     return false;
   }
 
-  RetVal Val::operator+(const Val& rhs) const {
-    ScopeRetVal scope;
-    // todo implement this correctly
-    if (isString() || rhs.isString()) {
-      return scope.escape(*toString() + *rhs.toString());
-    } else {
-      return scope.escape(toDouble() + rhs.toDouble());
-    }
-  }
-
   // Checked conversions
   bool Val::toBool() const
   {
@@ -114,13 +104,13 @@ namespace AotJS {
     }
   }
 
-  Ret<String> Val::toString() const
+  Retained<String> Val::toString() const
   {
     ScopeRet<String> scope;
     if (isGCThing()) {
       return scope.escape(asGCThing().toString());
     } else {
-      return scope.escape(new String(dump()));
+      return scope.escape(retain<String>(dump()));
     }
   }
 
@@ -148,11 +138,11 @@ namespace AotJS {
     return buf.str();
   }
 
-  RetVal Val::call(Local aThis, RawArgList aArgs) const
+  Local Val::call(Local aThis, RawArgList aArgs) const
   {
     ScopeRetVal scope;
     if (isFunction()) {
-      return scope.escape(*asFunction().call(aThis, aArgs));
+      return scope.escape(asFunction().call(aThis, aArgs));
     } else {
       #ifdef DEBUG
       std::cerr << "not a function\n";
@@ -160,6 +150,19 @@ namespace AotJS {
       std::abort();
     }
   }
+
+  #pragma mark operators
+
+  Local operator+(const Local& lhs, const Local& rhs) {
+    ScopeRetVal scope;
+    // todo implement this correctly
+    if (lhs->isString() || rhs->isString()) {
+      return scope.escape(retain<String>(lhs->toString()->str() + rhs->toString()->str()));
+    } else {
+      return scope.escape(lhs->toDouble() + rhs->toDouble());
+    }
+  }
+
 
   #pragma mark ArgList
 
@@ -206,11 +209,11 @@ namespace AotJS {
     return string(typeOf());
   }
 
-  Ret<String> GCThing::toString() const {
+  Retained<String> GCThing::toString() const {
     ScopeRet<String> scope;
     std::ostringstream buf;
     buf << "[" << typeOf() << "]";
-    return scope.escape(new String(buf.str()));
+    return scope.escape(retain<String>(buf.str()));
   }
 
   TypeOf GCThing::typeOf() const {
@@ -259,11 +262,11 @@ namespace AotJS {
     return typeOfObject;
   }
 
-  static RetVal normalizePropName(Val aName) {
+  static Local normalizePropName(Local aName) {
     ScopeRetVal scope;
-    if (aName.isString()) {
+    if (aName->isString()) {
       return scope.escape(aName);
-    } else if (aName.isSymbol()) {
+    } else if (aName->isSymbol()) {
       return scope.escape(aName);
     } else {
       // todo: convert to string
@@ -277,13 +280,13 @@ namespace AotJS {
 
   // todo: handle numeric indices
   // todo: getters
-  RetVal Object::getProp(Val aName) {
+  Local Object::getProp(Local aName) {
     ScopeRetVal scope;
-    Local name = *normalizePropName(aName);
+    Local name = normalizePropName(aName);
     auto index = mProps.find(*name);
     if (index == mProps.end()) {
       if (mPrototype) {
-        return scope.escape(*mPrototype->getProp(*name));
+        return scope.escape(mPrototype->getProp(name));
       } else {
         return scope.escape(Undefined());
       }
@@ -292,9 +295,9 @@ namespace AotJS {
     }
   }
 
-  void Object::setProp(Val aName, Val aVal) {
+  void Object::setProp(Local aName, Local aVal) {
     Local name = *normalizePropName(aName);
-    mProps.emplace(*name, aVal);
+    mProps.emplace(*name, *aVal);
   }
 
   void Object::markRefsForGC() {
@@ -391,9 +394,9 @@ namespace AotJS {
     return typeOfJSThing;
   }
 
-  Ret<String> JSThing::toString() const {
+  Retained<String> JSThing::toString() const {
     ScopeRet<String> scope;
-    return scope.escape(new String("[jsthing JSThing]"));
+    return scope.escape(retain<String>("[jsthing JSThing]"));
   }
 
   #pragma mark Cell
@@ -429,7 +432,7 @@ namespace AotJS {
   }
 
 
-  RetVal Function::call(Local aThis, RawArgList aArgs) {
+  Local Function::call(Local aThis, RawArgList aArgs) {
     ScopeRetVal scope;
     return scope.escape(*mBody(*this, aThis, ArgList(*this, aArgs)));
   }

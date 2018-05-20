@@ -14,11 +14,11 @@ int main() {
   Local func;
 
   // Register the function!
-  *func = new Function(
+  func = new Function(
     "work",
     1, // argument count
     // no scope capture
-    [] (Function& func, Local this_, ArgList args) -> RetVal {
+    [] (Function& func, Local this_, ArgList args) -> Local {
       // Functions which can return a value must allocate stack space for the
       // retval, Or Else.
       ScopeRetVal scope;
@@ -29,7 +29,7 @@ int main() {
       // Attempting to read beyond the actual number will be invalid.
       //
       // If it were captured by a lamdba, we'd have to copy it into locals below.
-      Binding root = args[0];
+      Local root(args[0]);
 
       // JavaScript local variable definitions are hoisted to the top.
       // They are all initialized to Undefined() when allocated on the stack.
@@ -45,21 +45,21 @@ int main() {
       // Now our function body actually starts!
       // Remember JS variable bindings are modeled as pointers to Val cells,
       // which we are filling with object pointers.
-      *obj = new Object();
-      *objname = new String("an_obj");
-      *propname = new String("propname");
-      *propval = new String("propval");
-      *unused = new String("unused");
+      obj = new Object();
+      objname = new String("an_obj");
+      propname = new String("propname");
+      propval = new String("propval");
+      unused = new String("unused");
 
       // This string is a different instance from the earlier "propname" one,
       // and should not survive GC.
-      *notpropname = new String(std::string("prop") + std::string("name"));
+      notpropname = new String(std::string("prop") + std::string("name"));
 
       // Retain a couple strings on an object
       // @todo this would be done with a wrapper interface probably
-      obj->asObject().setProp(*propname, *propval);
+      obj->asObject().setProp(propname, propval);
 
-      root->asObject().setProp(*objname, *obj);
+      root->asObject().setProp(objname, obj);
 
       return scope.escape(Undefined());
     }

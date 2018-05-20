@@ -10,18 +10,18 @@ int main() {
     Local report;
 
     // Register the function!
-    *report = new Function(
+    report = new Function(
       "report",
       3, // argument count
-      [] (Function& func, Local this_, ArgList args) -> RetVal {
+      [] (Function& func, Local this_, ArgList args) -> Local {
         ScopeRetVal scope;
 
         // this might work in c++17 mode with suitable iteators added
-        //Binding [a, b, c] = args;
+        //Local& [a, b, c] = args;
 
-        Binding a = args[0];
-        Binding b = args[1];
-        Binding c = args[2];
+        Local& a = args[0];
+        Local& b = args[1];
+        Local& c = args[2];
 
         std::cout << a->dump() << ", " << b->dump() << ", " << c->dump() << "\n";
 

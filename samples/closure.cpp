@@ -9,13 +9,13 @@ int main() {
   Local work;
 
   // Register the function!
-  *work = new Function(
+  work = new Function(
     "work",
     1, // argument count
     // no closures
     // Use a lambda for source prettiness.
     // Must be no C++ captures so we can turn it into a raw function pointer!
-    [] (Function& func_, Local this_, ArgList args) -> RetVal {
+    [] (Function& func_, Local this_, ArgList args) -> Local {
       ScopeRetVal scope;
 
       // Variable hoisting!
@@ -33,18 +33,18 @@ int main() {
       Retained<Cell> _b;
 
       Local a;
-      Binding b = _b->binding();
+      Local& b =_b->binding();
       Local func;
 
       // function declarations/definitions happen at the top of the scope too.
       // This is where we capture the `b` variable's location, knowing
       // its actual value can change.
-      *func = new Function(
+      func = new Function(
         "func",    // name
         0,         // arg arity
         {_b},      // captures
         // implementation
-        [] (Function& func, Local this_, ArgList args) -> RetVal {
+        [] (Function& func, Local this_, ArgList args) -> Local {
           // Allocate local scope for the return value.
           ScopeRetVal scope;
 
@@ -53,18 +53,18 @@ int main() {
           //
           // The capture binding gives you a reference into one of the linked
           // heap Cells, which are retained via a list in the Function object.
-          Binding b = func.capture(0).binding();
+          Local& b = func.capture(0).binding();
 
           // replace the variable in the parent scope
-          *b = new String("b plus one");
+          b = new String("b plus one");
 
           return scope.escape(Undefined());
         }
       );
 
       // Now we get to the body of the function:
-      *a = new String("a");
-      *b = new String("b");
+      a = new String("a");
+      b = new String("b");
 
       std::cout << "should say 'b': " << b->dump() << "\n";
 

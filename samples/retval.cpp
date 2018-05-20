@@ -15,27 +15,27 @@ int main() {
     Local play;
     Local life;
 
-    *work = new Function(
+    work = new Function(
       "work",
       0, // argument count
       // no scope capture
-      [] (Function& func, Local this_, ArgList args) -> RetVal {
+      [] (Function& func, Local this_, ArgList args) -> Local {
         ScopeRetVal scope;
         return scope.escape(new String("work"));
       }
     );
 
-    *play = new Function(
+    play = new Function(
       "play",
       0, // argument count
-      [] (Function& func, Local this_, ArgList args) -> RetVal {
+      [] (Function& func, Local this_, ArgList args) -> Local {
         ScopeRetVal scope;
         return scope.escape(new String("play"));
       }
     );
 
     // todo: operator overloading on Val
-    *life = *(*work->call(Null(), {}) + *play->call(Null(), {}));
+    life = work->call(Null(), {}) + play->call(Null(), {});
 
     // should say "workplay"
     std::cout << "should say 'workplay': " << life->dump() << "\n";
