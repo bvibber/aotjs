@@ -153,7 +153,7 @@ namespace AotJS {
 
   #pragma mark operators
 
-  Local operator+(const Local& lhs, const Local& rhs) {
+  Local operator+(Local lhs, Local rhs) {
     ScopeRetVal scope;
     // todo implement this correctly
     if (lhs->isString() || rhs->isString()) {
@@ -161,6 +161,38 @@ namespace AotJS {
     } else {
       return scope.escape(lhs->toDouble() + rhs->toDouble());
     }
+  }
+
+  Local operator-(Local lhs, Local rhs) {
+    ScopeRetVal scope;
+    return scope.escape(lhs->toDouble() - rhs->toDouble());
+  }
+
+  Local operator*(Local lhs, Local rhs) {
+    ScopeRetVal scope;
+    return scope.escape(lhs->toDouble() * rhs->toDouble());
+  }
+
+  Local operator/(Local lhs, Local rhs) {
+    ScopeRetVal scope;
+    return scope.escape(lhs->toDouble() / rhs->toDouble());
+  }
+
+  bool operator==(Local lhs, Local rhs) {
+    // todo move implementation?
+    return *lhs == *rhs;
+  }
+
+  bool operator<(Local lhs, Local rhs) {
+    // todo do strings compare too?
+    // todo do ints and stuff
+    Scope scope;
+    return lhs->toDouble() < rhs->toDouble();
+  }
+
+  bool operator>(Local lhs, Local rhs) {
+    Scope scope;
+    return lhs->toDouble() > rhs->toDouble();
   }
 
 

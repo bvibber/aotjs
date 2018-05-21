@@ -610,13 +610,13 @@ namespace AotJS {
 
   };
 
-  Local operator+(const Local& lhr, const Local& rhs);
-  Local operator-(const Local& lhr, const Local& rhs);
-  Local operator*(const Local& lhr, const Local& rhs);
-  Local operator/(const Local& lhr, const Local& rhs);
-  bool operator==(const Local& lhr, const Local& rhs);
-  bool operator<(const Local& lhr, const Local& rhs);
-  bool operator>(const Local& lhr, const Local& rhs);
+  Local operator+(Local lhs, Local rhs);
+  Local operator-(Local lhs, Local rhs);
+  Local operator*(Local lhs, Local rhs);
+  Local operator/(Local lhs, Local rhs);
+  bool operator==(Local lhs, Local rhs);
+  bool operator<(Local lhs, Local rhs);
+  bool operator>(Local lhs, Local rhs);
 
   template <class T>
   class Retained {
