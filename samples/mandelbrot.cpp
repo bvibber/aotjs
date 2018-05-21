@@ -40,6 +40,10 @@ int main() {
     }
   );
 
+  x0 = -2.5; x1 = 1; y0 = -1; y1 = 1;
+  cols = 72; rows = 24;
+  maxIters = 1000;
+
   for (row = 0; row < rows; row++) {
     y = (row / rows) * (y1 - y0) + y0;
     str = new String("");
@@ -55,7 +59,7 @@ int main() {
       } else if (iters == maxIters) {
         str += new String(" ");
       } else {
-        str += new String(" ");
+        str += new String("#");
       }
     }
     std::cout << str->dump() << "\n";

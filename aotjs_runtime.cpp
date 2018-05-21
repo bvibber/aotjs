@@ -49,17 +49,17 @@ namespace AotJS {
       return true;
     }
 
-    if (isString() && rhs.isString()) {
+    if (isString() || rhs.isString()) {
       // Two string instances may still compare equal.
-      return asString() == rhs.asString();
+      return toString()->str() == rhs.toString()->str();
     }
 
     // fixme handle box types better
     if (isInt32() && rhs.isInt32()) {
       return asInt32() == rhs.asInt32();
     }
-    if (isDouble() && rhs.isDouble()) {
-      return asDouble() == rhs.asDouble();
+    if (isDouble() || rhs.isDouble()) {
+      return toDouble() == rhs.toDouble();
     }
 
     // Non-identical non-string objects never compare identical.
