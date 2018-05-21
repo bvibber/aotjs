@@ -100,6 +100,7 @@ namespace AotJS {
     if (isInt31()) {
       return static_cast<double>(asInt31());
     } else {
+      // fixme
       return as<Box<double>>().val();
     }
   }
@@ -664,6 +665,13 @@ namespace AotJS {
       // No findable references to this object. Destroy it!
       mObjects.erase(obj);
       delete obj;
+    }
+  }
+
+  void Engine::maybeGC() {
+    // todo find a good heuristic
+    if (mAllocations++ % 1024 == 0) {
+      gc();
     }
   }
 

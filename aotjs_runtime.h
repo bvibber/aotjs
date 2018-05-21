@@ -98,6 +98,7 @@ namespace AotJS {
     // We need to be able to create a few sigil objects before
     // it's possible to cleanly run the GC system.
     bool mReadyForGC;
+    size_t mAllocations;
 
     // Sigil values with special boxed values
     Box<Undefined>* mUndefined;
@@ -179,6 +180,7 @@ namespace AotJS {
     }
 
     void gc();
+    void maybeGC();
     string dump();
   };
 
@@ -210,6 +212,8 @@ namespace AotJS {
       // Force garbage collection to happen on every allocation.
       // Should shake out some bugs.
       engine().gc();
+      #else
+      engine().maybeGC();
       #endif
 
       // We need a set of *all* allocated objects to do sweep.
