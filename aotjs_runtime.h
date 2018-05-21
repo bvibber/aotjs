@@ -575,10 +575,9 @@ namespace AotJS {
     Local(Null aVal)      : Local(Val(aVal)) {}
     Local(GCThing* aVal)  : Local(Val(aVal)) {}
 
-    /*
     // don't need these
     Local(const Local& aLocal)
-    : SmartVal(*aLocal.mRecord)
+    : SmartVal(aLocal.mRecord)
     {
       // override the copy constructor ..
     }
@@ -588,7 +587,6 @@ namespace AotJS {
     {
       // overide move constructor
     }
-    */
 
     Local()
     : Local(Undefined())
@@ -737,7 +735,7 @@ namespace AotJS {
 
     Local escape(Local aVal) {
       mRetVal = aVal;
-      return mRetVal;
+      return Local(&*mRetVal);
     }
   };
 
@@ -757,7 +755,7 @@ namespace AotJS {
 
     Retained<T> escape(Retained<T> aVal) {
       mRetVal = aVal;
-      return mRetVal;
+      return Retained<T>(&*mRetVal);
     }
   };
 

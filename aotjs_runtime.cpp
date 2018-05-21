@@ -157,7 +157,7 @@ namespace AotJS {
     ScopeRetVal scope;
     // todo implement this correctly
     if (lhs->isString() || rhs->isString()) {
-      return scope.escape(retain<String>(lhs->toString()->str() + rhs->toString()->str()));
+      return scope.escape(new String(lhs->toString()->str() + rhs->toString()->str()));
     } else {
       return scope.escape(lhs->toDouble() + rhs->toDouble());
     }
