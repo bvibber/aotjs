@@ -560,6 +560,12 @@ namespace AotJS {
       //
     }
 
+    Local(Val* aPtr)
+    : SmartVal(aPtr)
+    {
+      //
+    }
+
     /// C++ doesn't want to do multiple implicit conversions, so let's add
     /// some explicit constructors.
     Local(bool aVal)      : Local(Val(aVal)) {}
