@@ -157,7 +157,16 @@ namespace AotJS {
     ScopeRetVal scope;
     // todo implement this correctly
     if (lhs->isString() || rhs->isString()) {
-      return scope.escape(new String(lhs->toString()->str() + rhs->toString()->str()));
+      string left = lhs->toString()->str();
+      string right = lhs->toString()->str();
+      #ifdef DEBUG
+      std::cerr << "adding strings: " << left << "," << right << "\n";
+      #endif 
+      string str = left + right;
+      #ifdef DEBUG
+      std::cerr << "added strings: " << str << "\n";
+      #endif 
+      return scope.escape(new String(str));
     } else {
       return scope.escape(lhs->toDouble() + rhs->toDouble());
     }

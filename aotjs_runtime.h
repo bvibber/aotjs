@@ -574,6 +574,7 @@ namespace AotJS {
     Local(Undefined aVal) : Local(Val(aVal)) {}
     Local(Null aVal)      : Local(Val(aVal)) {}
     Local(GCThing* aVal)  : Local(Val(aVal)) {}
+    Local(const GCThing* aVal)  : Local(Val(aVal)) {}
 
     // don't need these
     Local(const Local& aLocal)
@@ -734,7 +735,10 @@ namespace AotJS {
     }
 
     Local escape(Local aVal) {
-      mRetVal = aVal;
+      *mRetVal = *aVal;
+      #if DEBUG
+      std::cerr << "escaping (" << aVal->dump() << ")\n";
+      #endif
       return Local(&*mRetVal);
     }
   };
@@ -754,6 +758,9 @@ namespace AotJS {
     }
 
     Retained<T> escape(Retained<T> aVal) {
+      #if DEBUG
+      std::cerr << "escaping<T> (" << aVal->dump() << ")\n";
+      #endif
       mRetVal = aVal;
       return Retained<T>(&*mRetVal);
     }
@@ -831,6 +838,9 @@ namespace AotJS {
 
     Retained<String> toString() const override {
       ScopeRet<String> scope;
+      #ifdef DEBUG
+      std::cerr << "toString for string: " << data << "\n";
+      #endif
       return scope.escape(this);
     }
 
