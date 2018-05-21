@@ -537,16 +537,6 @@ namespace AotJS {
     const Val* operator->() const {
       return mRecord;
     }
-
-    // Conversion ops
-
-    operator Val*() const {
-      return mRecord;
-    }
-
-    operator const Val*() const {
-      return mRecord;
-    }
   };
 
   ///
@@ -617,6 +607,18 @@ namespace AotJS {
   bool operator==(Local lhs, Local rhs);
   bool operator<(Local lhs, Local rhs);
   bool operator>(Local lhs, Local rhs);
+
+  Local& operator++(Local& aLocal);
+  Local& operator--(Local& aLocal);
+  Local operator++(Local& aLocal, int);
+  Local operator--(Local& aLocal, int);
+
+  Local& operator+=(Local& lhs, const Local& rhs);
+  Local& operator-=(Local& lhs, const Local& rhs);
+  Local& operator*=(Local& lhs, const Local& rhs);
+  Local& operator/=(Local& lhs, const Local& rhs);
+  // ... etc ...
+
 
   template <class T>
   class Retained {

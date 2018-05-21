@@ -195,6 +195,63 @@ namespace AotJS {
     return lhs->toDouble() > rhs->toDouble();
   }
 
+  Local& operator++(Local& aLocal) {
+    // because these modify the original parameter, they do not
+    // go through ScopeRetVal::escape for the return value.
+    Scope scope;
+    aLocal = aLocal + 1;
+    return aLocal;
+  }
+
+  Local& operator--(Local& aLocal) {
+    // because these modify the original parameter, they do not
+    // go through ScopeRetVal::escape for the return value.
+    Scope scope;
+    aLocal = aLocal - 1;
+    return aLocal;
+  }
+
+  Local operator++(Local& aLocal, int) {
+    ScopeRetVal scope;
+    Local prev = aLocal;
+    aLocal = aLocal + 1;
+    return scope.escape(prev);
+  }
+
+  Local operator--(Local& aLocal, int) {
+    ScopeRetVal scope;
+    Local prev = aLocal;
+    aLocal = aLocal - 1;
+    return scope.escape(prev);
+  }
+
+  Local& operator+=(Local& lhs, const Local& rhs)
+  {
+    Scope scope;
+    lhs = lhs + rhs;
+    return lhs;
+  }
+
+  Local& operator-=(Local& lhs, const Local& rhs)
+  {
+    Scope scope;
+    lhs = lhs - rhs;
+    return lhs;
+  }
+
+  Local& operator*=(Local& lhs, const Local& rhs)
+  {
+    Scope scope;
+    lhs = lhs * rhs;
+    return lhs;
+  }
+
+  Local& operator/=(Local& lhs, const Local& rhs)
+  {
+    Scope scope;
+    lhs = lhs / rhs;
+    return lhs;
+  }
 
   #pragma mark ArgList
 
