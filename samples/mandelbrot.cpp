@@ -30,7 +30,7 @@ int main() {
       zx = 0;
       zy = 0;
 
-      for (i = 0; i < maxIters && zx * zx + zy * zy) < 4.0; i++) {
+      for (i = 0; i < maxIters && (zx * zx + zy * zy) < 4.0; i++) {
         new_zx = zx * zx - zy * zy + cx;
         zy = 2 * zx * zy + cy;
         zx = new_zx;

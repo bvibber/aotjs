@@ -33,7 +33,7 @@ int main() {
       Retained<Cell> _b;
 
       Local a;
-      Local& b =_b->binding();
+      Local b(_b->binding());
       Local func;
 
       // function declarations/definitions happen at the top of the scope too.
@@ -53,7 +53,7 @@ int main() {
           //
           // The capture binding gives you a reference into one of the linked
           // heap Cells, which are retained via a list in the Function object.
-          Local& b = func.capture(0).binding();
+          Local b(func.capture(0).binding());
 
           // replace the variable in the parent scope
           b = new String("b plus one");

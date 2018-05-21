@@ -47,7 +47,6 @@ namespace std {
 }
 
 namespace AotJS {
-  typedef Val* Binding;
   template <typename T> class Box;
 
   class Engine;
@@ -779,10 +778,10 @@ namespace AotJS {
     }
 
     ///
-    /// Return a Binding for the given argument index.
+    /// Return a Val* for the given argument index.
     /// Valid up to the expected arity of the function.
     ///
-    Binding operator[](size_t index) const {
+    Val* operator[](size_t index) const {
       return &mBegin[index];
     }
   };
@@ -931,8 +930,8 @@ namespace AotJS {
 
     ~Cell() override;
 
-    Binding binding() {
-      return mVal;
+    Val* binding() {
+      return &mVal;
     }
 
     Val& val() {
