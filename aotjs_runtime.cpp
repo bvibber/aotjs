@@ -525,7 +525,7 @@ namespace AotJS {
 
   void Function::markRefsForGC() {
     for (auto cell : mCaptures) {
-      cell->val().markForGC();
+      cell->markForGC();
     }
   }
 
