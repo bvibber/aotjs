@@ -88,21 +88,47 @@ namespace AotJS {
 
   int32_t Val::toInt32() const
   {
+    #ifdef VAL_TAGGED_POINTER
     if (isInt31()) {
       return asInt31();
     } else {
+      // fixme this will explode if not an int32 box
       return as<Box<int32_t>>().val();
     }
+    #endif
+
+    #ifdef VAL_SHIFTED_NAN_BOX
+    if (isInt32()) {
+      return asInt32();
+    } else {
+      // todo implement conversions
+      std::abort();
+      return 0;
+    }
+    #endif
   }
 
   double Val::toDouble() const
   {
+    #ifdef VAL_TAGGED_POINTER
     if (isInt31()) {
       return static_cast<double>(asInt31());
     } else {
-      // fixme
+      // fixme conversions
       return as<Box<double>>().val();
     }
+    #endif
+
+    #ifdef VAL_SHIFTED_NAN_BOX
+    if (isInt32()) {
+      return static_cast<double>(asInt32());
+    } else if (isGCThing()) {
+      // fixme conversions
+      return as<Box<double>>().val();
+    } else {
+      return static_cast<double>(asDouble());
+    }
+    #endif
   }
 
   Retained<String> Val::toString() const
@@ -121,8 +147,10 @@ namespace AotJS {
       buf << asDouble();
     } else if (isInt32()) {
       buf << asInt32();
+    #ifdef VAL_TAGGED_POINTER
     } else if (isInt31()) {
       buf << asInt31();
+    #endif
     } else if (isBool()) {
       if (asBool()) {
         buf << "true";

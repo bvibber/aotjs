@@ -297,48 +297,99 @@ namespace AotJS {
     TypeOf typeOf() const override;
   };
 
-  ///
-  /// Polymorphic JS values are handled by using pointer-sized values with
-  /// either a pointer to a GCThing or a tagged 31-bit integer with a tag bit
-  /// in the lowest bit.
-  ///
-  /// Unlike NaN-boxing this means double-precision floats and some int32s
-  /// must be boxed into GCThing subclasses and allocated on the heap.
-  /// Other values like undefined, null, and boolean use special sigil
-  /// objects that don't have to be allocated on each use.
-  ///
-  /// However it is closer to the available reference types in the Wasm
-  /// garbage collection proposal: https://github.com/WebAssembly/gc/pull/34
-  /// which includes an int31ref tagged type which can be freely mixed with
-  /// references.
-  ///
-  /// And I don't expect high-performance float math to be a big use case
-  /// for this plugin model, so we'll live with the boxing.
+  //#define VAL_TAGGED_POINTER 1
+  #define VAL_SHIFTED_NAN_BOX 1
+
   class Val {
+    #ifdef VAL_TAGGED_POINTER
+    ///
+    /// Polymorphic JS values are handled by using pointer-sized values with
+    /// either a pointer to a GCThing or a tagged 31-bit integer with a tag bit
+    /// in the lowest bit.
+    ///
+    /// Unlike NaN-boxing this means double-precision floats and some int32s
+    /// must be boxed into GCThing subclasses and allocated on the heap.
+    /// Other values like undefined, null, and boolean use special sigil
+    /// objects that don't have to be allocated on each use.
+    ///
+    /// However it is closer to the available reference types in the Wasm
+    /// garbage collection proposal: https://github.com/WebAssembly/gc/pull/34
+    /// which includes an int31ref tagged type which can be freely mixed with
+    /// references.
+    ///
+    /// And I don't expect high-performance float math to be a big use case
+    /// for this plugin model, so we'll live with the boxing.
     union {
       size_t mRaw;
       GCThing* mPtr;
     };
 
+    static size_t tagPointer(GCThing *aPtr) {
+      return reinterpret_cast<size_t>(aPtr);
+    }
+
     static bool isValidInt31(int32_t aInt) {
       return ((aInt << 1) >> 1) == aInt;
     }
 
-    static GCThing* tagInt31(int32_t aInt) {
-       return reinterpret_cast<GCThing*>(static_cast<size_t>((aInt << 1) | 1));
+    static size_t tagInt31(int32_t aInt) {
+       return static_cast<size_t>((aInt << 1) | 1);
     }
 
-    static GCThing* tagOrBoxInt32(int32_t aInt) {
+    static size_t tagOrBoxInt32(int32_t aInt) {
       if (isValidInt31(aInt)) {
         return tagInt31(aInt);
       } else {
-        return new Box<int32_t>(aInt);
+        return reinterpret_cast<size_t>(new Box<int32_t>(aInt));
       }
     }
 
-    static int32_t derefInt31(const GCThing* aPtr) {
-      return static_cast<int32_t>(reinterpret_cast<size_t>(aPtr)) >> 1;
+    static size_t tagOrBoxDouble(double aDouble) {
+      return reinterpret_cast<size_t>(new Box<double>(aDouble));
     }
+
+    static int32_t derefInt31(size_t aRaw) {
+      return static_cast<int32_t>(reinterpret_cast<size_t>(aRaw)) >> 1;
+    }
+
+    GCThing* asPointer() const {
+      return mPtr;
+    }
+    #endif
+
+    #ifdef VAL_SHIFTED_NAN_BOX
+    // JavaScriptCore-style NaN boxing.
+    // Value is shifted with an addition to turn NaNs into 0s.
+    union {
+      uint64_t mRaw;
+    };
+
+    static const uint64_t tagShift       = 0x0010'0000'0000'0000;
+    static const uint64_t tagMask        = 0xffff'0000'0000'0000;
+    static const uint64_t tagBitsPointer = 0x0000'0000'0000'0000;
+    static const uint64_t tagBitsInt32   = 0xffff'0000'0000'0000;
+
+    GCThing* asPointer() const {
+      return reinterpret_cast<GCThing*>(mRaw);
+    }
+
+    static uint64_t tagPointer(GCThing *aPtr) {
+      return static_cast<uint64_t>(reinterpret_cast<size_t>(aPtr));
+    }
+
+    static uint64_t tagOrBoxInt32(int32_t aInt) {
+      return static_cast<uint64_t>(static_cast<uint32_t>(aInt)) | tagBitsInt32;
+    }
+
+    static uint64_t tagOrBoxDouble(double aDouble) {
+      if (aDouble == -INFINITY) {
+        // turns into 0 with our bitshift
+        return reinterpret_cast<uint64_t>(new Box<double>(aDouble));
+      } else {
+        return *reinterpret_cast<uint64_t*>(&aDouble) + tagShift;
+      }
+    }
+    #endif
 
   public:
 
@@ -348,15 +399,15 @@ namespace AotJS {
          // don't use null pointers!
         std::abort();
       }
-      mPtr = aRef;
+      mRaw = tagPointer(aRef);
     }
     #else
-    Val(GCThing* aRef)        : mPtr(aRef) {}
+    Val(GCThing* aRef)        : mRaw(tagPointer(aRef)) {}
     #endif
 
     Val(const GCThing* aRef)  : Val(const_cast<GCThing*>(aRef)) {} // don't use null pointers!
-    Val(double aDouble)       : Val(new Box<double>(aDouble)) {}
-    Val(int32_t aInt)         : Val(tagOrBoxInt32(aInt)) {};
+    Val(double aDouble)       : mRaw(tagOrBoxDouble(aDouble)) {}
+    Val(int32_t aInt)         : mRaw(tagOrBoxInt32(aInt)) {};
     Val(bool aBool)           : Val(aBool ? engine().trueRef() : engine().falseRef()) {}
     Val(Null aNull)           : Val(engine().nullRef()) {}
     Val(Undefined aUndefined) : Val(engine().undefinedRef()) {}
@@ -371,6 +422,7 @@ namespace AotJS {
       return *this;
     }
 
+    #ifdef VAL_TAGGED_POINTER
     size_t raw() const {
       return mRaw;
     }
@@ -387,10 +439,6 @@ namespace AotJS {
       return !tag();
     }
 
-    bool isTypeOf(TypeOf aExpected) const {
-      return isGCThing() && (mPtr->typeOf() == aExpected);
-    }
-
     bool isDouble() const {
       return isTypeOf(typeOfBoxDouble);
     }
@@ -398,17 +446,50 @@ namespace AotJS {
     bool isInt32() const {
       return isTypeOf(typeOfBoxInt32);
     }
+    #endif
+
+    #ifdef VAL_SHIFTED_NAN_BOX
+    uint64_t raw() const {
+      return mRaw;
+    }
+
+    uint64_t tag() const {
+      return mRaw & tagMask;
+    }
+
+    bool isGCThing() const {
+      return tag() == tagBitsPointer;
+    }
+
+    bool isDouble() const {
+      uint64_t tag_ = tag();
+      if (tag_ == tagBitsPointer) {
+        return isTypeOf(typeOfBoxDouble);
+      } else {
+        return tag_ != tagBitsInt32;
+      }
+    }
+
+    bool isInt32() const {
+      return tag() == tagBitsInt32;
+    }
+
+    #endif
+
+    bool isTypeOf(TypeOf aExpected) const {
+      return isGCThing() && (asPointer()->typeOf() == aExpected);
+    }
 
     bool isBool() const {
-      return (mPtr == engine().trueRef()) || (mPtr == engine().falseRef());
+      return (asPointer() == engine().trueRef()) || (asPointer() == engine().falseRef());
     }
 
     bool isUndefined() const {
-      return (mPtr == engine().undefinedRef());
+      return (asPointer() == engine().undefinedRef());
     }
 
     bool isNull() const {
-      return (mPtr == engine().nullRef());
+      return (asPointer() == engine().nullRef());
     }
 
     bool isInternal() const {
@@ -435,20 +516,36 @@ namespace AotJS {
       return isTypeOf(typeOfFunction);
     }
 
+    #ifdef VAL_TAGGED_POINTER
     double asDouble() const {
         return reinterpret_cast<Box<double>*>(mPtr)->val();
     }
+    #endif
+    #ifdef VAL_SHIFTED_NAN_BOX
+    double asDouble() const {
+      uint64_t shifted = mRaw - tagShift;
+      return *reinterpret_cast<double*>(&shifted);
+    }
+    #endif
 
+    #ifdef VAL_TAGGED_POINTER
     int32_t asInt31() const {
-      return derefInt31(mPtr);
+      return derefInt31(mRaw);
     }
 
     int32_t asInt32() const {
       return reinterpret_cast<Box<int32_t>*>(mPtr)->val();
     }
+    #endif
+
+    #ifdef VAL_SHIFTED_NAN_BOX
+    int32_t asInt32() const {
+      return static_cast<int32_t>(static_cast<uint32_t>(mRaw));
+    }
+    #endif
 
     bool asBool() const {
-      return reinterpret_cast<Box<bool>*>(mPtr)->val();
+      return reinterpret_cast<Box<bool>*>(asPointer())->val();
     }
 
     Null asNull() const {
@@ -466,39 +563,39 @@ namespace AotJS {
     // Un-checked conversions returning a raw thingy
 
     GCThing& asGCThing() const {
-      return *mPtr;
+      return *asPointer();
     }
 
     Internal& asInternal() const {
-      return *static_cast<Internal *>(mPtr);
+      return *static_cast<Internal *>(asPointer());
     }
 
     JSThing& asJSThing() const {
-      return *static_cast<JSThing*>(mPtr);
+      return *static_cast<JSThing*>(asPointer());
     }
 
     Object& asObject() const {
       // fixme it doesn't understand the type rels
       // clean up these methods later
-      return *reinterpret_cast<Object *>(mPtr);
+      return *reinterpret_cast<Object *>(asPointer());
     }
 
     String& asString() const {
-      return *reinterpret_cast<String *>(mPtr);
+      return *reinterpret_cast<String *>(asPointer());
     }
 
     Symbol& asSymbol() const {
-      return *reinterpret_cast<Symbol *>(mPtr);
+      return *reinterpret_cast<Symbol *>(asPointer());
     }
 
     Function& asFunction() const {
-      return *reinterpret_cast<Function *>(mPtr);
+      return *reinterpret_cast<Function *>(asPointer());
     }
 
     // Unchecked conversions returning a *T, castable to Retained<T>
     template <class T>
     T& as() const {
-      return *static_cast<T*>(mPtr);
+      return *static_cast<T*>(asPointer());
     }
 
     // Checked conversions
