@@ -193,19 +193,19 @@ namespace AotJS {
     }
   }
 
-  Local operator-(Local lhs, Local rhs) {
-    ScopeRetVal scope;
-    return scope.escape(lhs->toDouble() - rhs->toDouble());
+  double operator-(Local lhs, Local rhs) {
+    Scope scope;
+    return lhs->toDouble() - rhs->toDouble();
   }
 
-  Local operator*(Local lhs, Local rhs) {
-    ScopeRetVal scope;
-    return scope.escape(lhs->toDouble() * rhs->toDouble());
+  double operator*(Local lhs, Local rhs) {
+    Scope scope;
+    return lhs->toDouble() * rhs->toDouble();
   }
 
-  Local operator/(Local lhs, Local rhs) {
-    ScopeRetVal scope;
-    return scope.escape(lhs->toDouble() / rhs->toDouble());
+  double operator/(Local lhs, Local rhs) {
+    Scope scope;
+    return lhs->toDouble() / rhs->toDouble();
   }
 
   bool operator==(Local lhs, Local rhs) {

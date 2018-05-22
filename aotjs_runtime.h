@@ -708,9 +708,9 @@ namespace AotJS {
   };
 
   Local operator+(Local lhs, Local rhs);
-  Local operator-(Local lhs, Local rhs);
-  Local operator*(Local lhs, Local rhs);
-  Local operator/(Local lhs, Local rhs);
+  double operator-(Local lhs, Local rhs);
+  double operator*(Local lhs, Local rhs);
+  double operator/(Local lhs, Local rhs);
   bool operator==(Local lhs, Local rhs);
   bool operator<(Local lhs, Local rhs);
   bool operator>(Local lhs, Local rhs);
