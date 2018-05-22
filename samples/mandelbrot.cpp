@@ -35,6 +35,7 @@ int main() {
       zy = 0;
 
       for (i = 0; i < maxIters && (zx * zx + zy * zy) < 4.0; i++) {
+        Scope subscope;
         new_zx = zx * zx - zy * zy + cx;
         zy = 2 * zx * zy + cy;
         zx = new_zx;
@@ -49,11 +50,17 @@ int main() {
   maxIters = 1000;
 
   for (row = 0; row < rows; row++) {
+    Scope scopeRow;
+
     y = (row / rows) * (y1 - y0) + y0;
     str = new String("");
+
     for (col = 0; col < cols; col++) {
+      Scope scopeCol;
+
       x = (col / cols) * (x1 - x0) + x0;
       iters = iterate_mandelbrot->call(Null(), {x, y, maxIters});
+
       if (iters == 0) {
         str += new String(".");
       } else if (iters == 1) {
