@@ -193,9 +193,39 @@ namespace AotJS {
     }
   }
 
+  Local operator+(double lhs, Local rhs) {
+    ScopeRetVal scope;
+    // todo implement this correctly
+    if (rhs->isString()) {
+      return scope.escape(new String(Local(lhs)->toString()->str() + rhs->toString()->str()));
+    } else {
+      return scope.escape(lhs + rhs->toDouble());
+    }
+  }
+
+  Local operator+(Local lhs, double rhs) {
+    ScopeRetVal scope;
+    // todo implement this correctly
+    if (lhs->isString()) {
+      return scope.escape(new String(lhs->toString()->str() + Local(rhs)->toString()->str()));
+    } else {
+      return scope.escape(lhs->toDouble() + rhs);
+    }
+  }
+
   double operator-(Local lhs, Local rhs) {
     Scope scope;
     return lhs->toDouble() - rhs->toDouble();
+  }
+
+  double operator-(double lhs, Local rhs) {
+    Scope scope;
+    return lhs - rhs->toDouble();
+  }
+
+  double operator-(Local lhs, double rhs) {
+    Scope scope;
+    return lhs->toDouble() - rhs;
   }
 
   double operator*(Local lhs, Local rhs) {
@@ -203,9 +233,29 @@ namespace AotJS {
     return lhs->toDouble() * rhs->toDouble();
   }
 
+  double operator*(double lhs, Local rhs) {
+    Scope scope;
+    return lhs * rhs->toDouble();
+  }
+
+  double operator*(Local lhs, double rhs) {
+    Scope scope;
+    return lhs->toDouble() * rhs;
+  }
+
   double operator/(Local lhs, Local rhs) {
     Scope scope;
     return lhs->toDouble() / rhs->toDouble();
+  }
+
+  double operator/(double lhs, Local rhs) {
+    Scope scope;
+    return lhs / rhs->toDouble();
+  }
+
+  double operator/(Local lhs, double rhs) {
+    Scope scope;
+    return lhs->toDouble() / rhs;
   }
 
   bool operator==(Local lhs, Local rhs) {
@@ -220,9 +270,31 @@ namespace AotJS {
     return lhs->toDouble() < rhs->toDouble();
   }
 
+  bool operator<(Local lhs, double rhs) {
+    Scope scope;
+    return lhs->toDouble() < rhs;
+  }
+
+  bool operator<(double lhs, Local rhs) {
+    // todo do strings compare too?
+    // todo do ints and stuff
+    Scope scope;
+    return lhs < rhs->toDouble();
+  }
+
   bool operator>(Local lhs, Local rhs) {
     Scope scope;
     return lhs->toDouble() > rhs->toDouble();
+  }
+
+  bool operator>(double lhs, Local rhs) {
+    Scope scope;
+    return lhs > rhs->toDouble();
+  }
+
+  bool operator>(Local lhs, double rhs) {
+    Scope scope;
+    return lhs->toDouble() > rhs;
   }
 
   Local& operator++(Local& aLocal) {

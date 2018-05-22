@@ -708,12 +708,24 @@ namespace AotJS {
   };
 
   Local operator+(Local lhs, Local rhs);
+  Local operator+(double lhs, Local rhs);
+  Local operator+(Local lhs, double rhs);
   double operator-(Local lhs, Local rhs);
+  double operator-(double lhs, Local rhs);
+  double operator-(Local lhs, double rhs);
   double operator*(Local lhs, Local rhs);
+  double operator*(double lhs, Local rhs);
+  double operator*(Local lhs, double rhs);
   double operator/(Local lhs, Local rhs);
+  double operator/(double lhs, Local rhs);
+  double operator/(Local lhs, double rhs);
   bool operator==(Local lhs, Local rhs);
   bool operator<(Local lhs, Local rhs);
+  bool operator<(double lhs, Local rhs);
+  bool operator<(Local lhs, double rhs);
   bool operator>(Local lhs, Local rhs);
+  bool operator>(double lhs, Local rhs);
+  bool operator>(Local lhs, double rhs);
 
   Local& operator++(Local& aLocal);
   Local& operator--(Local& aLocal);
