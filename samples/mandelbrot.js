@@ -1,3 +1,5 @@
+var start = Date.now();
+
 // z(n+1) = z(n)^2 + c
 function iterate_mandelbrot(cx, cy, maxIters) {
   var zx = 0, zy = 0;
@@ -33,3 +35,6 @@ for (var row = 0; row < rows; row++) {
   }
   console.log(str);
 }
+
+var end = Date.now() - start;
+console.log(end, 'milliseconds runtime');

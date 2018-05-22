@@ -8,11 +8,15 @@ int main() {
   Scope scope;
 
   // Hoist all variable declarations
+  Local start;
   Local iterate_mandelbrot;
   Local x0, x1, y0, y1;
   Local cols, rows;
   Local maxIters;
   Local row, y, str, col, x, iters;
+  Local end;
+
+  start = engine().now();
 
   iterate_mandelbrot = new Function(
     "iterate_mandelbrot",
@@ -64,6 +68,9 @@ int main() {
     }
     std::cout << str->dump() << "\n";
   }
+
+  end = engine().now() - start;
+  std::cout << end->dump() << " milliseconds runtime\n";
 
   return 0;
 }

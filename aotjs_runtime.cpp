@@ -6,6 +6,7 @@
 #include <iostream>
 #endif
 
+#include <chrono>
 #include <sstream>
 
 namespace AotJS {
@@ -725,4 +726,16 @@ namespace AotJS {
   Engine& engine() {
     return engine_singleton;
   }
+
+  double Engine::now() {
+    auto point = std::chrono::high_resolution_clock::now();
+
+    // fixme dont assume epoch is unix epoch!
+    auto offset = point.time_since_epoch();
+
+    // return an integral number for Date.now, but too big for int32_t
+    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(offset);
+    return static_cast<double>(millis.count());
+  }
+
 }

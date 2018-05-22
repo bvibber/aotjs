@@ -182,6 +182,7 @@ namespace AotJS {
     void gc();
     void maybeGC();
     string dump();
+    double now();
   };
 
   // Singleton
