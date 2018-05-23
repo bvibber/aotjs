@@ -571,7 +571,7 @@ namespace AotJS {
     #endif
     #ifdef VAL_SHIFTED_NAN_BOX
     double asDouble() const {
-      uint64_t shifted = mRaw - tagShift;
+      int64_t shifted = mRaw - tagShift;
       return *reinterpret_cast<double*>(&shifted);
     }
     #endif
