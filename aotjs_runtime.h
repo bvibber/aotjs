@@ -81,6 +81,9 @@ namespace AotJS {
     operator double() const {
       return NAN;
     }
+    operator string() const {
+      return "undefined";
+    }
   };
 
   class Null {
@@ -92,6 +95,9 @@ namespace AotJS {
     operator double() const {
       return 0.0;
     }
+    operator string() const {
+      return "null";
+    }
   };
 
   class Deleted {
@@ -102,6 +108,9 @@ namespace AotJS {
     }
     operator double() const {
       return 0;
+    }
+    operator string() const {
+      return "deleted";
     }
   };
 
@@ -327,6 +336,8 @@ namespace AotJS {
     }
 
     TypeOf typeOf() const override;
+
+    string dump() override;
   };
 
   //#define VAL_TAGGED_POINTER 1

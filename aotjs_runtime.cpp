@@ -62,9 +62,12 @@ namespace AotJS {
     if (isDouble() || rhs.isDouble()) {
       return toDouble() == rhs.toDouble();
     }
-
-    // Non-identical non-string objects never compare identical.
-    return false;
+    if (isObject() || rhs.isObject()) {
+      // Non-identical non-string objects never compare identical.
+      return false;
+    }
+    // hack for box doubles
+    return toDouble() == rhs.toDouble();
   }
 
   // Checked conversions
@@ -116,12 +119,13 @@ namespace AotJS {
     // Microoptimize the tag check
     const uint64_t tag_ = tag();
     if (tag_ == tagBitsPointer) {
+      // A few special values are boxed doubles; others may be objects.
       return asGCThing().toDouble();
     } else if (tag_ == tagBitsInt32) {
       return static_cast<double>(asInt32());
     } else {
       // Everything else is an encoded double.
-      return static_cast<double>(asDouble());
+      return asDouble();
     }
     #endif
   }
@@ -442,6 +446,28 @@ namespace AotJS {
   TypeOf Box<Deleted>::typeOf() const {
     return typeOfDeleted;
   }
+
+  template<class T>
+  string Box<T>::dump() {
+    std::ostringstream buf;
+    buf << val();
+    return buf.str();
+  };
+
+  template<>
+  string Box<Undefined>::dump() {
+    return val();
+  };
+
+  template<>
+  string Box<Null>::dump() {
+    return val();
+  };
+
+  template<>
+  string Box<Deleted>::dump() {
+    return val();
+  };
 
   #pragma mark Object
 
