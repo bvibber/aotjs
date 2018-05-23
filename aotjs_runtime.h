@@ -74,14 +74,35 @@ namespace AotJS {
 
   class Undefined {
     // just a tag
+  public:
+    operator int32_t() const {
+      return 0;
+    }
+    operator double() const {
+      return NAN;
+    }
   };
 
   class Null {
     // just a tag
+  public:
+    operator int32_t() const {
+      return 0;
+    }
+    operator double() const {
+      return 0.0;
+    }
   };
 
   class Deleted {
     // just a tag
+  public:
+    operator int32_t() const {
+      return 0;
+    }
+    operator double() const {
+      return 0;
+    }
   };
 
   typedef Local (*FunctionBody)(Function& func, Local this_, ArgList args);
@@ -252,6 +273,8 @@ namespace AotJS {
     virtual TypeOf typeOf() const;
 
     virtual Retained<String> toString() const;
+    virtual int32_t toInt32() const;
+    virtual double toDouble() const;
   };
 
   // Internal classes that should not be exposed to JS
@@ -293,6 +316,14 @@ namespace AotJS {
 
     T val() const {
       return mVal;
+    }
+
+    int32_t toInt32() const override {
+      return static_cast<int32_t>(val());
+    }
+
+    double toDouble() const override {
+      return static_cast<double>(val());
     }
 
     TypeOf typeOf() const override;
@@ -441,11 +472,11 @@ namespace AotJS {
     }
 
     bool isDouble() const {
-      return isTypeOf(typeOfBoxDouble);
+      return false; // not supported in pointer tag
     }
 
     bool isInt32() const {
-      return isTypeOf(typeOfBoxInt32);
+      return false; // not supported in pointer tag
     }
     #endif
 
@@ -464,11 +495,11 @@ namespace AotJS {
 
     bool isDouble() const {
       uint64_t tag_ = tag();
-      if (tag_ == tagBitsPointer) {
-        return isTypeOf(typeOfBoxDouble);
-      } else {
-        return tag_ != tagBitsInt32;
-      }
+      return tag_ > tagBitsPointer && tag_ < tagBitsInt32;
+    }
+
+    bool isInt31() const {
+      return false; // not supported
     }
 
     bool isInt32() const {
@@ -519,7 +550,8 @@ namespace AotJS {
 
     #ifdef VAL_TAGGED_POINTER
     double asDouble() const {
-        return reinterpret_cast<Box<double>*>(mPtr)->val();
+      // cannot happen
+      return NAN;
     }
     #endif
     #ifdef VAL_SHIFTED_NAN_BOX
@@ -540,6 +572,10 @@ namespace AotJS {
     #endif
 
     #ifdef VAL_SHIFTED_NAN_BOX
+    int32_t asInt31() const {
+      return 0; // can never happen
+    }
+
     int32_t asInt32() const {
       return static_cast<int32_t>(static_cast<uint32_t>(mRaw));
     }

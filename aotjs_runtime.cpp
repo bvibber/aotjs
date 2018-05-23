@@ -89,24 +89,16 @@ namespace AotJS {
 
   int32_t Val::toInt32() const
   {
-    #ifdef VAL_TAGGED_POINTER
+    if (isGCThing()) {
+      return asGCThing().toInt32();
+    }
     if (isInt31()) {
       return asInt31();
-    } else {
-      // fixme this will explode if not an int32 box
-      return as<Box<int32_t>>().val();
     }
-    #endif
-
-    #ifdef VAL_SHIFTED_NAN_BOX
     if (isInt32()) {
       return asInt32();
-    } else {
-      // todo implement conversions
-      std::abort();
-      return 0;
     }
-    #endif
+    return static_cast<int32_t>(asDouble());
   }
 
   double Val::toDouble() const
@@ -115,18 +107,20 @@ namespace AotJS {
     if (isInt31()) {
       return static_cast<double>(asInt31());
     } else {
-      // fixme conversions
-      return as<Box<double>>().val();
+      // Everything else is an object type.
+      return asGCThing().toDouble();
     }
     #endif
-
+    
     #ifdef VAL_SHIFTED_NAN_BOX
-    if (isInt32()) {
+    // Microoptimize the tag check
+    const uint64_t tag_ = tag();
+    if (tag_ == tagBitsPointer) {
+      return asGCThing().toDouble();
+    } else if (tag_ == tagBitsInt32) {
       return static_cast<double>(asInt32());
-    } else if (isGCThing()) {
-      // fixme conversions
-      return as<Box<double>>().val();
     } else {
+      // Everything else is an encoded double.
       return static_cast<double>(asDouble());
     }
     #endif
@@ -148,10 +142,8 @@ namespace AotJS {
       buf << asDouble();
     } else if (isInt32()) {
       buf << asInt32();
-    #ifdef VAL_TAGGED_POINTER
     } else if (isInt31()) {
       buf << asInt31();
-    #endif
     } else if (isBool()) {
       if (asBool()) {
         buf << "true";
@@ -405,6 +397,14 @@ namespace AotJS {
     std::ostringstream buf;
     buf << "[" << typeOf() << "]";
     return scope.escape(retain<String>(buf.str()));
+  }
+
+  int32_t GCThing::toInt32() const {
+    return 0;
+  }
+
+  double GCThing::toDouble() const {
+    return NAN;
   }
 
   TypeOf GCThing::typeOf() const {
