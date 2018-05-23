@@ -117,7 +117,7 @@ namespace AotJS {
     
     #ifdef VAL_SHIFTED_NAN_BOX
     // Microoptimize the tag check
-    const uint64_t tag_ = tag();
+    const int64_t tag_ = tag();
     if (tag_ == tagBitsPointer) {
       // A few special values are boxed doubles; others may be objects.
       return asGCThing().toDouble();

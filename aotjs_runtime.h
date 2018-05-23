@@ -404,32 +404,36 @@ namespace AotJS {
     // JavaScriptCore-style NaN boxing.
     // Value is shifted with an addition to turn NaNs into 0s.
     union {
-      uint64_t mRaw;
+      int64_t mRaw;
     };
 
-    static const uint64_t tagShift       = 0x0010'0000'0000'0000;
-    static const uint64_t tagMask        = 0xffff'0000'0000'0000;
-    static const uint64_t tagBitsPointer = 0x0000'0000'0000'0000;
-    static const uint64_t tagBitsInt32   = 0xffff'0000'0000'0000;
+    static const int64_t tagShift       = 0x0010'0000'0000'0000;
+    static const int64_t tagMask        = 0xffff'0000'0000'0000;
+    static const int64_t tagBitShift    = 48;
+    static const int64_t tagBitsPointer = 0;
+    static const int64_t tagBitsInt32   = -1;
 
     GCThing* asPointer() const {
       return reinterpret_cast<GCThing*>(mRaw);
     }
 
-    static uint64_t tagPointer(GCThing *aPtr) {
-      return static_cast<uint64_t>(reinterpret_cast<size_t>(aPtr));
+    static int64_t tagPointer(GCThing *aPtr) {
+      return static_cast<int64_t>(reinterpret_cast<size_t>(aPtr));
     }
 
-    static uint64_t tagOrBoxInt32(int32_t aInt) {
-      return static_cast<uint64_t>(static_cast<uint32_t>(aInt)) | tagBitsInt32;
+    static int64_t tagOrBoxInt32(int32_t aInt) {
+      return static_cast<int64_t>(
+        static_cast<uint64_t>(static_cast<uint32_t>(aInt)) |
+        (static_cast<uint64_t>(tagBitsInt32) << tagBitShift)
+      );
     }
 
-    static uint64_t tagOrBoxDouble(double aDouble) {
+    static int64_t tagOrBoxDouble(double aDouble) {
       if (aDouble == -INFINITY) {
         // turns into 0 with our bitshift
-        return reinterpret_cast<uint64_t>(new Box<double>(aDouble));
+        return tagPointer(new Box<double>(aDouble));
       } else {
-        return *reinterpret_cast<uint64_t*>(&aDouble) + tagShift;
+        return *reinterpret_cast<int64_t*>(&aDouble) + tagShift;
       }
     }
     #endif
@@ -492,12 +496,12 @@ namespace AotJS {
     #endif
 
     #ifdef VAL_SHIFTED_NAN_BOX
-    uint64_t raw() const {
+    int64_t raw() const {
       return mRaw;
     }
 
-    uint64_t tag() const {
-      return mRaw & tagMask;
+    int64_t tag() const {
+      return mRaw >> tagBitShift;
     }
 
     bool isGCThing() const {
@@ -505,8 +509,8 @@ namespace AotJS {
     }
 
     bool isDouble() const {
-      uint64_t tag_ = tag();
-      return tag_ > tagBitsPointer && tag_ < tagBitsInt32;
+      int64_t tag_ = tag();
+      return tag_ != tagBitsPointer && tag_ != tagBitsInt32;
     }
 
     bool isInt31() const {
@@ -578,7 +582,8 @@ namespace AotJS {
     }
 
     int32_t asInt32() const {
-      return reinterpret_cast<Box<int32_t>*>(mPtr)->val();
+      // not supported
+      return false;
     }
     #endif
 
