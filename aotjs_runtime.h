@@ -6,6 +6,7 @@
 #endif
 
 #include <cinttypes>
+#include <cmath>
 
 #include <string>
 #include <vector>
